@@ -1,4 +1,6 @@
-name: Deploy to GitHub Pages
+# เว็บแอปเป็นไฟล์ static ล้วน — เผยแพร่ด้วยการมิเรอร์ main ไปยังสาขา gh-pages
+# (GitHub Pages ของ repo นี้ตั้ง Source = สาขา gh-pages ซึ่งเปิดใช้อัตโนมัติตั้งแต่สาขานี้ถูกสร้าง)
+name: Publish to GitHub Pages
 
 on:
   push:
@@ -6,31 +8,17 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
   group: pages
   cancel-in-progress: true
 
 jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  publish:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Configure Pages (auto-enable)
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
-      - name: Upload site
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: '.'
-      - name: Deploy
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Mirror main -> gh-pages
+        run: git push origin HEAD:gh-pages --force
