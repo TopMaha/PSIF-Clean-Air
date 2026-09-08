@@ -914,6 +914,11 @@ async function reportRoute(env, url, seg) {
     const emp = (await env.DB.prepare('SELECT id,name,vsm FROM employees WHERE active=1').all()).results;
     const rows = (await env.DB.prepare(
       'SELECT reporter_id,status,safety_result,category FROM psif WHERE year=?').bind(year).all()).results;
+    // คนที่ "ไม่มีเป้า": ช่องว่างข้อมูลพนักงานลาออก (RESIGNED-*) + คนที่ปิดใช้งานแล้ว (ลาออก)
+    // ข้อมูลเก่ายังอยู่ครบและแสดงในรายงาน แต่ไม่ตั้งเป้าให้คนที่ไม่ได้ทำงานแล้ว
+    const offRows = (await env.DB.prepare('SELECT id FROM employees WHERE active=0').all()).results;
+    const noTarget = new Set(offRows.map(e => e.id));
+    const isNoTarget = id => noTarget.has(id) || /^RESIGNED-/i.test(String(id || ''));
     const trow = await env.DB.prepare('SELECT * FROM targets WHERE year=?').bind(year).first();
     // เป้ารายประเภทของปีนั้น — ไม่มีแถวก็ใช้ค่ามาตรฐานของ Clean Air (2/2/1)
     const catTgt = {
@@ -940,7 +945,9 @@ async function reportRoute(env, url, seg) {
     }
     // "ขาด" นับรายประเภท — ส่งเกินประเภทหนึ่งไม่ชดเชยอีกประเภท (ตรงกับที่หน้าเว็บคิด)
     const people = Object.values(map).map(m => {
-      m.left = Object.keys(catTgt).reduce((s, k) => s + Math.max(0, catTgt[k] - (m.cats[k] || 0)), 0);
+      m.no_target = isNoTarget(m.id);
+      m.left = m.no_target ? 0
+        : Object.keys(catTgt).reduce((s, k) => s + Math.max(0, catTgt[k] - (m.cats[k] || 0)), 0);
       m.missing = m.left;
       return m;
     }).sort((a, b) => b.done - a.done);

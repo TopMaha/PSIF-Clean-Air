@@ -971,6 +971,17 @@ function bucketIdFor(vsm){
 }
 function bucketNameFor(vsm){ return `ช่องว่าง — ข้อมูลพนักงานลาออก (${String(vsm||'').trim()||'ไม่ระบุแผนก'})`; }
 function bucketOf(vsm){ const id=bucketIdFor(vsm); return state.employees.find(e=>(e.id||'').toUpperCase()===id); }
+/* ---- คนที่ "ไม่มีเป้า" ----
+   1) ช่องว่างข้อมูลพนักงานลาออก (RESIGNED-*) — เป็นที่เก็บข้อมูล ไม่ใช่คน
+   2) พนักงานที่ปิดใช้งานแล้ว (active=0 = ลาออก/ย้ายออก) — ข้อมูลเก่ายังดูได้ครบ
+      แต่ไม่ตั้งเป้าให้คนที่ไม่ได้ทำงานแล้ว และไม่ถูกนับเป็น "ยังไม่ครบเป้า" ของแผนก
+   ใช้กับคนที่โผล่มาจากข้อมูลเก่า เช่น 6 รหัสที่ส่ง PSIF ไว้ก่อนลาออก (นำเข้าจาก Excel)
+   รหัสที่ไม่มีในทะเบียนเลยยังได้เป้าตามปกติ — จะได้เห็นว่ามีคนตกหล่นจากทะเบียน */
+function isNoTargetPerson(id){
+  if(isBucketId(id)) return true;
+  const e=empMap().get(id);
+  return !!e && e.active===0;
+}
 /* แผนกทั้งหมดที่มีพนักงานจริง (ไม่รวมช่องว่าง) — ใช้สร้าง/ตรวจช่องว่างให้ครบทุกแผนก */
 function allDepts(){
   return [...new Set(state.employees.filter(e=>!isBucketId(e.id)).map(e=>(e.vsm||'').trim()).filter(Boolean))].sort();
@@ -2111,9 +2122,11 @@ function computePerson(y){
     // ข้อ 4: done / cats (ใช้คิดเป้า+โบนัส) นับเฉพาะ Safety อนุมัติ + จบงาน เท่านั้น
     if(isCounted(r)){ m.done++; if(m.cats[r.category]!=null) m.cats[r.category]++; }
   });
-  // "ขาด" นับรายประเภท (ส่งเกินประเภทหนึ่งไม่ชดเชยอีกประเภท) · ช่องว่างพนักงานลาออกไม่มีเป้า
-  return {target,people:Object.values(map).map(m=>{ m.isBucket=isBucketId(m.id);
-    m.left=m.isBucket?0:leftOf(m.cats,y); m.missing=m.left; return m;
+  // "ขาด" นับรายประเภท (ส่งเกินประเภทหนึ่งไม่ชดเชยอีกประเภท)
+  // ช่องว่าง + พนักงานที่ลาออกแล้ว ไม่มีเป้า → "เหลือ" = 0 และไม่ถูกนับเป็นหัวคน
+  return {target,people:Object.values(map).map(m=>{
+    m.isBucket=isBucketId(m.id); m.noTarget=isNoTargetPerson(m.id);
+    m.left=m.noTarget?0:leftOf(m.cats,y); m.missing=m.left; return m;
   }).sort((a,b)=>b.done-a.done||b.submitted-a.submitted)};
 }
 
@@ -2426,8 +2439,7 @@ function renderMgr(){
   const mgrIds=new Set(state.employees.filter(e=>e.active!==0&&e.role==='manager').map(e=>e.id));
   const {people}=computePerson(y);
   const mgrs=people.filter(p=>mgrIds.has(p.id));
-  mgrs.forEach(p=>{ p.showVsm=true;
-    p.left=leftOf(p.cats,y); });
+  mgrs.forEach(p=>{ p.showVsm=true; });   // p.left มาจาก computePerson แล้ว (นับรายประเภท)
   const by={
     done:(a,b)=>b.done-a.done||b.submitted-a.submitted||(a.name||'').localeCompare(b.name||'','th'),
     sub:(a,b)=>b.submitted-a.submitted||b.done-a.done,
@@ -2475,8 +2487,8 @@ function teamPeople(){
   const key=d=>(d||'').trim()||'(ไม่ระบุ)';
   const group=people.filter(p=>key(p.vsm)===teamDept);
   // เหลือ = ยังขาดอีกกี่เรื่องจึงครบเป้าทุกประเภท (นับตามประเภท 2/2/1 — ส่งเกินประเภทหนึ่งไม่ชดเชยอีกประเภท)
-  // ช่องว่าง (ข้อมูลพนักงานลาออก) ไม่มีเป้า — ตั้ง "เหลือ" = 0 และไม่นับรวมในสรุปจำนวนคน
-  group.forEach(p=>{ p.left=p.isBucket?0:leftOf(p.cats,teamYear); });
+  // ช่องว่าง + คนที่ลาออกแล้ว ไม่มีเป้า — ตั้ง "เหลือ" = 0 และไม่นับรวมในสรุปจำนวนคน
+  group.forEach(p=>{ p.left=p.noTarget?0:leftOf(p.cats,teamYear); });
   const q=norm(teamQ);
   let arr=q? group.filter(p=>norm((p.name||'')+' '+(p.id||'')).includes(q)) : group.slice();
   const by={
@@ -2489,13 +2501,13 @@ function teamPeople(){
   return {group,arr};
 }
 function personRow(p){
-  // ช่องว่าง: แสดงเป็นกล่องรวมข้อมูลพนักงานลาออก ไม่มีเป้า/ความคืบหน้า
-  if(p.isBucket){
+  // ไม่มีเป้า (ช่องว่าง / คนที่ลาออกแล้ว): แสดงยอดที่เคยทำไว้ ไม่มีแถบความคืบหน้าและไม่มี "เหลือ"
+  if(p.noTarget){
     const cats=CAT_KEYS.map(k=>`<span class="pcat">${CAT_SHORT[k]} ${p.cats[k]||0}</span>`).join('');
     return `<div class="prow">
       <div class="prow-h">
         <div class="prow-nm"><b>${esc(p.name)}</b> <span class="sub">${esc(p.id)}${p.showVsm&&p.vsm?' · '+esc(p.vsm):''}</span></div>
-        <span class="badge b-gray">📦 ข้อมูลพนักงานลาออก</span>
+        <span class="badge b-gray">${p.isBucket?'📦 ข้อมูลพนักงานลาออก':'🚪 ลาออกแล้ว — ไม่มีเป้า'}</span>
       </div>
       <div class="prow-meta"><span>ส่ง <b>${p.submitted}</b></span><span>ผ่านเกณฑ์ <b>${p.done}</b></span>${cats}</div>
     </div>`;
@@ -2539,14 +2551,15 @@ function openTeam(dept){
 function teamGo(p){ teamPage=p; renderTeamList(); const m=document.querySelector('.modal'); if(m)m.scrollTo({top:0,behavior:'smooth'}); }
 function renderTeamList(){
   const {group,arr}=teamPeople();
-  const real=group.filter(p=>!p.isBucket);                 // ช่องว่างไม่นับเป็นหัวคน
+  const real=group.filter(p=>!p.noTarget);                 // ช่องว่าง + คนที่ลาออกแล้ว ไม่นับเป็นหัวคน
   const okN=real.filter(p=>p.left===0).length;
-  const bkt=group.filter(p=>p.isBucket).reduce((s,p)=>s+p.submitted,0);
+  const outs=group.filter(p=>p.noTarget);
+  const bkt=outs.reduce((s,p)=>s+p.submitted,0);
   $('teamSum').innerHTML=`<div class="team-sum">
     <span class="badge b-blue">ทั้งหมด ${real.length} คน</span>
     <span class="badge b-green">✓ ครบเป้า ${okN} คน</span>
     <span class="badge b-orange">ยังไม่ครบ ${real.length-okN} คน</span>
-    ${bkt?`<span class="badge b-gray">📦 ข้อมูลพนักงานลาออก ${bkt} เรื่อง</span>`:''}
+    ${bkt?`<span class="badge b-gray">🚪 พนักงานที่ลาออกแล้ว ${outs.length} คน · ${bkt} เรื่อง</span>`:''}
   </div>`;
   const pages=Math.ceil(arr.length/PAGE_SIZE)||1; if(teamPage>pages)teamPage=pages; if(teamPage<1)teamPage=1;
   const page=arr.slice((teamPage-1)*PAGE_SIZE, teamPage*PAGE_SIZE);
@@ -3458,9 +3471,9 @@ function exportTeamXlsx(dept,y){
 
   const {people}=computePerson(y);
   const inScope=dept? people.filter(p=>deptKey(p.vsm)===dept) : people.slice();
-  // ช่องว่าง (ข้อมูลพนักงานลาออก) ไม่ใช่คนที่ต้องตามงาน → แยกออกจากรายงานรายคน แต่บอกจำนวนเรื่องไว้ในหัวรายงาน
-  const buckets=inScope.filter(p=>p.isBucket);
-  const arr=inScope.filter(p=>!p.isBucket);
+  // ช่องว่าง + คนที่ลาออกแล้ว ไม่ใช่คนที่ต้องตามงาน → แยกออกจากรายงานรายคน แต่บอกจำนวนเรื่องไว้ในหัวรายงาน
+  const buckets=inScope.filter(p=>p.noTarget);
+  const arr=inScope.filter(p=>!p.noTarget);
   const bucketSub=buckets.reduce((s,p)=>s+p.submitted,0), bucketDone=buckets.reduce((s,p)=>s+p.done,0);
   if(!arr.length){ toast('ไม่มีพนักงานในกลุ่มนี้','orange'); return; }
   // ขาดรายประเภท (ส่งเกินประเภทหนึ่งไม่ชดเชยอีกประเภท) — ตรรกะเดียวกับ "เหลือ" บนหน้าจอ
