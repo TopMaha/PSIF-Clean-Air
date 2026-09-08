@@ -109,7 +109,7 @@ export default {
 
       switch (head) {
         case '':
-        case 'health':    return ok({ service: 'psif-cleanair', version: '2.7', time: nowISO() });
+        case 'health':    return ok({ service: 'psif-cleanair', version: '2.8', time: nowISO() });
         case 'bootstrap': return await bootstrap(env);
         case 'psif':      return await psifRoute(env, request, seg);
         case 'employees':
@@ -816,11 +816,20 @@ async function targetsRoute(env, request) {
     const deny = await requireSuperAdmin(env, request, b);   // ข้อ 3/6: ตั้งเป้าหมาย = Super Admin เท่านั้น
     if (deny) return deny;
     const year = +b.year || new Date().getFullYear();
+    // TENNECO Clean Air: เป้าตั้งแยกรายประเภท (2/2/1) + Target Plant ของทั้งโรงงาน (425)
+    const cr  = num(b.t_psif,       CA_TARGET.t_psif);
+    const nm  = num(b.t_near_miss,  CA_TARGET.t_near_miss);
+    const bh  = num(b.t_behavior,   CA_TARGET.t_behavior);
+    const per = num(b.per_person_target, cr + nm + bh) || (cr + nm + bh);
+    const plant = num(b.plant_target, CA_TARGET.plant_target);
     await env.DB.prepare(
-      `INSERT INTO targets (year,per_person_target) VALUES (?,?)
-       ON CONFLICT(year) DO UPDATE SET per_person_target=excluded.per_person_target`
-    ).bind(year, +b.per_person_target || 6).run();
-    return ok({ year });
+      `INSERT INTO targets (year,per_person_target,t_psif,t_near_miss,t_behavior,plant_target)
+       VALUES (?,?,?,?,?,?)
+       ON CONFLICT(year) DO UPDATE SET per_person_target=excluded.per_person_target,
+         t_psif=excluded.t_psif, t_near_miss=excluded.t_near_miss,
+         t_behavior=excluded.t_behavior, plant_target=excluded.plant_target`
+    ).bind(year, per, cr, nm, bh, plant).run();
+    return ok({ year, per_person_target: per, t_psif: cr, t_near_miss: nm, t_behavior: bh, plant_target: plant });
   }
   return err('method not allowed', 405);
 }
@@ -905,8 +914,15 @@ async function reportRoute(env, url, seg) {
     const emp = (await env.DB.prepare('SELECT id,name,vsm FROM employees WHERE active=1').all()).results;
     const rows = (await env.DB.prepare(
       'SELECT reporter_id,status,safety_result,category FROM psif WHERE year=?').bind(year).all()).results;
-    const target = (await env.DB.prepare('SELECT per_person_target FROM targets WHERE year=?')
-      .bind(year).first())?.per_person_target || 6;
+    const trow = await env.DB.prepare('SELECT * FROM targets WHERE year=?').bind(year).first();
+    // เป้ารายประเภทของปีนั้น — ไม่มีแถวก็ใช้ค่ามาตรฐานของ Clean Air (2/2/1)
+    const catTgt = {
+      'PSIF':      num(trow && trow.t_psif,      CA_TARGET.t_psif),
+      'Near miss': num(trow && trow.t_near_miss, CA_TARGET.t_near_miss),
+      'Behavior':  num(trow && trow.t_behavior,  CA_TARGET.t_behavior),
+    };
+    const target = catTgt['PSIF'] + catTgt['Near miss'] + catTgt['Behavior'];
+    const plant_target = num(trow && trow.plant_target, CA_TARGET.plant_target);
     const newCats = () => ({ 'PSIF': 0, 'Near miss': 0, 'Behavior': 0 });
     const map = {};
     for (const e of emp) map[e.id] = {
@@ -919,15 +935,16 @@ async function reportRoute(env, url, seg) {
       m.submitted++;
       if (r.safety_result === 'approved') m.approved++;
       if (['rejected', 'duplicate', 'not_cardinal'].includes(r.safety_result)) m.rejected++;
-      // ข้อ 4: นับผลงาน (done/cats/โบนัส) เฉพาะ Safety อนุมัติ + ดำเนินการจนจบ เท่านั้น
+      // ข้อ 4: นับผลงาน (done/cats) เฉพาะ Safety อนุมัติ + ดำเนินการจนจบ เท่านั้น
       if (isCounted(r)) { m.done++; if (m.cats[r.category] != null) m.cats[r.category]++; }
     }
+    // "ขาด" นับรายประเภท — ส่งเกินประเภทหนึ่งไม่ชดเชยอีกประเภท (ตรงกับที่หน้าเว็บคิด)
     const people = Object.values(map).map(m => {
-      m.missing = Math.max(0, target - m.done);
-      m.bonus = bonusFromCats(m.cats);
+      m.left = Object.keys(catTgt).reduce((s, k) => s + Math.max(0, catTgt[k] - (m.cats[k] || 0)), 0);
+      m.missing = m.left;
       return m;
     }).sort((a, b) => b.done - a.done);
-    return ok({ year, target, people });
+    return ok({ year, target, cat_target: catTgt, plant_target, people });
   }
 
   if (kind === 'overview') {
@@ -951,14 +968,10 @@ async function reportRoute(env, url, seg) {
   return err('unknown report', 404);
 }
 
-/* โบนัสแบบบวกสะสม (ให้ตรงกับ frontend): ผ่าน PSIF(Con)≥2 = 5% พื้นฐาน ·
- * ครบ Near miss ≥2 = +2.5% · ครบ PSIF(Behavior) ≥2 = +2.5% (สูงสุด 10%)
- * นับจาก cats ที่ผ่านเกณฑ์ข้อ 4 แล้วเท่านั้น */
-function bonusFromCats(cats) {
-  const con = cats['PSIF'] || 0, beh = cats['Behavior'] || 0, nm = cats['Near miss'] || 0;
-  if (con < 2) return 0;
-  let b = 5;
-  if (nm >= 2) b += 2.5;
-  if (beh >= 2) b += 2.5;
-  return b;
-}
+/* ค่ามาตรฐานเป้าหมายของ TENNECO Clean Air — ใช้เมื่อปีนั้นยังไม่มีแถวในตาราง targets
+ *   PSIF Cardinal Rules 2 · Near Miss 2 · พฤติกรรมตามกิจกรรมเสี่ยงสูง 1 = 5 เรื่อง/คน/ปี
+ *   Target Plant 425 เรื่อง/ปี (= 5 × 85 คน)
+ * 🚫 ระบบชุดนี้ไม่มีการคิดโบนัสจาก PSIF (ต่างจาก PSIF ของโรงงานเดิม) */
+const CA_TARGET = { t_psif: 2, t_near_miss: 2, t_behavior: 1, plant_target: 425 };
+/* อ่านตัวเลขแบบยอมให้เป็น 0 ได้ — null/undefined/'' เท่านั้นที่ถอยไปใช้ค่าตั้งต้น */
+function num(v, dflt) { return (v === null || v === undefined || v === '') ? dflt : (+v || 0); }

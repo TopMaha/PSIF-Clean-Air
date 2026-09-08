@@ -382,29 +382,11 @@ button.ptag{cursor:pointer}
 .pl-row:last-child{border-bottom:0}
 .pl-row .pl-t{font-weight:600;font-size:13.5px;line-height:1.35;margin-top:5px}
 .pl-row .pl-m{display:flex;gap:9px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin-top:3px}
-/* การ์ดอธิบายโบนัส 2 ส่วน (95% KPI อื่น + ส่วน PSIF) */
-.bonus-wrap{background:linear-gradient(180deg,#FFFBEB,#fff);border:1px solid var(--orange-bd);border-radius:12px;padding:12px;margin-top:12px}
-.bonus-eq{display:flex;align-items:stretch;justify-content:center;gap:6px;flex-wrap:wrap;margin:10px 0 6px}
-.bonus-eq .part{display:flex;flex-direction:column;justify-content:center;text-align:center;padding:7px 10px;border-radius:10px;line-height:1.2;min-width:86px}
-.bonus-eq .part .v{font-size:20px;font-weight:800}
-.bonus-eq .part .t{font-size:9.5px;font-weight:600;color:var(--muted)}
-.bonus-eq .op{align-self:center;font-size:18px;font-weight:800;color:var(--muted)}
-.bonus-eq .kpi{background:var(--blue-light);color:var(--blue)}
-.bonus-eq .psif{background:var(--orange-bg);color:var(--orange)}
-.bonus-eq .sum{background:var(--green-bg);color:var(--green)}
-.bonus-bar{position:relative;height:20px;background:#F1F5F9;border-radius:8px;display:flex;margin:14px 0 6px}
-.bonus-bar .seg{height:100%}
-.bonus-bar .seg.kpi{background:linear-gradient(90deg,var(--blue),var(--steel));border-radius:8px 0 0 8px}
-.bonus-bar .seg.psif{background:linear-gradient(90deg,#fbbf24,var(--amber))}
-.bonus-bar .seg.psif.full{background:linear-gradient(90deg,#34d399,var(--green))}
-.bonus-100{position:absolute;top:-4px;bottom:-4px;border-left:2px dashed var(--red)}
-.bonus-100 i{position:absolute;left:-30px;top:-13px;font-style:normal;font-size:9.5px;font-weight:700;color:var(--red);white-space:nowrap}
-.bonus-chk{display:flex;align-items:center;gap:8px;font-size:12.5px;margin:5px 0}
-.bonus-chk .pct{margin-left:auto;font-weight:700;font-size:12px}
-.bonus-tbl{width:100%;border-collapse:collapse;font-size:11.5px;margin-top:8px}
-.bonus-tbl th{background:var(--blue-light);color:var(--blue-dark);text-align:left;padding:5px 8px}
-.bonus-tbl td{border-top:1px solid var(--border);padding:5px 8px}
-.bonus-tbl tr.on td{background:var(--green-bg);font-weight:700;color:var(--green)}
+/* การ์ดอธิบาย/สรุปในป๊อปอัพ (เป้าหมายของฉัน · ยอด "ส่งแล้ว" นับอย่างไร)
+   TENNECO Clean Air ไม่มีส่วนโบนัส — คลาสชุดนี้จึงเหลือเฉพาะกล่องข้อความ + รายการติ๊ก */
+.info-wrap{background:linear-gradient(180deg,#FFFBEB,#fff);border:1px solid var(--orange-bd);border-radius:12px;padding:12px;margin-top:12px}
+.info-chk{display:flex;align-items:center;gap:8px;font-size:12.5px;margin:5px 0}
+.info-chk .pct{margin-left:auto;font-weight:700;font-size:12px}
 
 /* before/after paired thumbnails on the tracker card (req #5) */
 .ba-thumbs{display:flex;gap:8px;margin-top:10px}
@@ -697,7 +679,7 @@ const LS = {
   set(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(_){ } },
 };
 
-const APP_VERSION='2.7';   // เลขเวอร์ชันแอป — แสดงที่หน้า login + แถบบนสุด (อัปเดตทีละ 0.1 เมื่อออกรุ่นใหม่)
+const APP_VERSION='2.8';   // เลขเวอร์ชันแอป — แสดงที่หน้า login + แถบบนสุด (อัปเดตทีละ 0.1 เมื่อออกรุ่นใหม่)
 let ADMIN_PASSWORD = LS.get('psifca_admin_pw','admin1234'); // changeable in code/settings
 const DEFAULT_API = 'https://psif-cleanair-api.wiphawas-sketchup.workers.dev'; // shared online DB (D1) + photos (R2)
 let API = LS.get('psifca_api', DEFAULT_API);
@@ -710,11 +692,11 @@ const state = {
 
 /* ---- PSIF types: fixed at exactly 3 (per requirement) ----
    `key` = value stored in DB (unchanged, so legacy data keeps counting)
-   `name` = display label · order = PSIF (Con) · Near miss · PSIF (Behavior) */
+   `name` = ชื่อที่แสดง (ศัพท์ของ TENNECO Clean Air) · เป้าหมายรายประเภทดูที่ CAT_TARGET_FALLBACK */
 const FIXED_CATS = [
-  {id:'psif',      key:'PSIF',      name:'PSIF (Con)',      active:1},
-  {id:'near_miss', key:'Near miss', name:'Near miss',       active:1},
-  {id:'behavior',  key:'Behavior',  name:'PSIF (Behavior)', active:1},
+  {id:'psif',      key:'PSIF',      name:'PSIF Cardinal Rules',        active:1},
+  {id:'near_miss', key:'Near miss', name:'Near Miss',                  active:1},
+  {id:'behavior',  key:'Behavior',  name:'พฤติกรรมตามกิจกรรมเสี่ยงสูง',   active:1},
 ];
 /* map a stored category value -> display label (tolerant of old/new strings) */
 function catLabel(v){ const c=FIXED_CATS.find(x=>x.key===v||x.name===v); return c?c.name:(v||'-'); }
@@ -731,73 +713,28 @@ const STATUS = {
   done:      {label:'เสร็จ', cls:'b-green'},
 };
 const STEPS = ['บันทึกเข้าระบบ','Safety อนุมัติ','กำลังดำเนินการ','เสร็จ'];
-/* โบนัสแบบบวกอิสระ (แก้ 2026-07-23 ตามกฎล่าสุด): แต่ละประเภทบวกได้เอง ไม่ต้องผ่าน PSIF(Con) ก่อน
-   ครบ PSIF(Con) ≥2       = +5%
-   ครบ Near miss ≥2       = +2.5%
-   ครบ PSIF(Behavior) ≥2  = +2.5%   (สูงสุดรวม 10%) */
-function bonusFromCats(cats){
-  const con=cats['PSIF']||0, beh=cats['Behavior']||0, nm=cats['Near miss']||0;
-  let b=0;
-  if(con>=2) b+=5;
-  if(nm>=2)  b+=2.5;
-  if(beh>=2) b+=2.5;
-  return b;
-}
-/* 2026-07-17: โครงโบนัสรวมทั้งบริษัท — KPI งานอื่น 95% + ส่วน PSIF 5% = 100% มาตรฐาน
-   ส่วน PSIF ขยับเป็น 10% ได้เมื่อทำครบทั้ง 3 ประเภท → รวมสูงสุด 105% (เกินเป้าปกติ)
-   ตัวเลข % ในแอปนี้ = "ส่วนของ PSIF" เท่านั้น ไม่ใช่โบนัสทั้งก้อน — พนักงานเคยสับสนจุดนี้ */
-const KPI_OTHER_PCT=95, PSIF_BASE_PCT=5, PSIF_MAX_PCT=10;
-const BONUS_RULE_TXT='💡 โบนัสรวม = <b>KPI งานอื่น 95%</b> + <b>ส่วน PSIF</b> (ทำครบทุกประเภทได้ <b>10%</b> = รวม <b>105%</b>)<br>'
- +'เงื่อนไขส่วน PSIF (บวกอิสระแต่ละประเภท ไม่ต้องผ่าน Con ก่อน): ครบ PSIF(Con) ≥2 ได้ <b>+5%</b> · ครบ Near miss ≥2 <b>+2.5%</b> · ครบ PSIF(Behavior) ≥2 <b>+2.5%</b> — สูงสุด 10%<br>'
- +'⚖️ นับเฉพาะเรื่องที่ <b>Safety อนุมัติ</b> และ <b>ดำเนินการจนจบ</b> เท่านั้น';
+/* 🚫 TENNECO Clean Air ไม่คิดโบนัสจาก PSIF — วัดผลด้วย "ครบเป้าตามประเภท" อย่างเดียว
+   (ระบบ PSIF ของโรงงานเดิมมีส่วนโบนัส 5–10% แต่ชุดนี้ตัดออกทั้งหมดตามข้อกำหนดของ Clean Air) */
 
-/* การ์ดอธิบายโบนัสรายคน — ตอบคำถาม "ทำครบแล้วทำไมขึ้น 10% ไม่ใช่ 100%?" ด้วยภาพ + ตาราง 4 ขั้น
-   pend (v1.9, ไม่บังคับ) = {wait,work} จำนวนเรื่องค้างรายประเภท → บอกว่า "ถ้าผ่านครบจะได้เท่าไร" */
-function bonusExplainHtml(cats,pend){
-  const b=bonusFromCats(cats);
-  const con=cats['PSIF']||0, nm=cats['Near miss']||0, beh=cats['Behavior']||0;
-  const total=KPI_OTHER_PCT+b;
-  let msg;
-  if(b>=PSIF_MAX_PCT) msg='🎉 <b>สุดยอด!</b> คุณทำ PSIF ครบทั้ง 3 ประเภท — ส่วน PSIF ได้เต็ม <b>10%</b> โบนัสรวมของคุณจึงเป็น <b>105%</b> ซึ่ง<b>เกิน</b>เป้าปกติ 100% (เลข "10%" คือส่วนของ PSIF เท่านั้น ไม่ใช่โบนัสทั้งก้อน)';
-  else if(b<=0) msg='ส่วน PSIF ของคุณยังเป็น <b>0%</b> — ทำแต่ละประเภทให้ครบ <b>2 เรื่อง</b> (อนุมัติ+จบงาน) เพื่อเริ่มสะสม% : PSIF(Con) <b>+5%</b> · Near miss <b>+2.5%</b> · PSIF(Behavior) <b>+2.5%</b> (ตอนนี้โบนัสรวมได้แค่ 95%)';
-  else msg=`ตอนนี้คุณได้ส่วน PSIF <b>${b}%</b> (รวม ${total}%) — ทำให้ครบทุกประเภท (≥2 เรื่อง/ประเภท) เพื่อขยับเป็น <b>10%</b> → โบนัสรวม <b>105%</b>`;
-  const chk=(ok,label,val,pct)=>`<div class="bonus-chk"><span>${ok?'✅':'⭕'}</span><span>${label} <b>${val}/${CAT_TARGET}</b> เรื่อง</span><span class="pct" style="color:${ok?'var(--green)':'var(--muted2)'}">${pct}</span></div>`;
-  const lvl=(on,psif,tot,cap)=>`<tr class="${on?'on':''}"><td>${cap}</td><td>${psif}</td><td><b>${tot}</b>${on?' ← คุณอยู่ตรงนี้':''}</td></tr>`;
-  return `<div class="bonus-wrap">
-    <div style="font-weight:800;font-size:13.5px">🧮 โบนัสของคุณมาจาก 2 ส่วน</div>
-    <div class="bonus-eq">
-      <span class="part kpi"><span class="v">95%</span><span class="t">KPI งานอื่นๆ<br>(ประเมินแยกต่างหาก)</span></span>
-      <span class="op">+</span>
-      <span class="part psif"><span class="v">${b}%</span><span class="t">PSIF จากแอปนี้<br>(พื้นฐาน 5% · เต็ม 10%)</span></span>
-      <span class="op">=</span>
-      <span class="part sum"><span class="v">${total}%</span><span class="t">โบนัสรวมของคุณ*<br>(เต็มมาตรฐาน 100%)</span></span>
-    </div>
-    <div class="bonus-bar">
-      <span class="seg kpi" style="width:${(KPI_OTHER_PCT/105*100).toFixed(1)}%"></span>
-      ${b>0?`<span class="seg psif ${b>=PSIF_MAX_PCT?'full':''}" style="width:${(b/105*100).toFixed(1)}%"></span>`:''}
-      <span class="bonus-100" style="left:${(100/105*100).toFixed(1)}%"><i>เป้า 100%</i></span>
-    </div>
-    <div class="sub" style="margin:8px 0">${msg}</div>
-    ${chk(con>=CAT_TARGET,'PSIF (Con)',con, con>=CAT_TARGET?'+5%':'ยังไม่ได้ +5%')}
-    ${chk(nm>=CAT_TARGET,'Near miss',nm, nm>=CAT_TARGET?'+2.5%':'ยังไม่ได้ +2.5%')}
-    ${chk(beh>=CAT_TARGET,'PSIF (Behavior)',beh, beh>=CAT_TARGET?'+2.5%':'ยังไม่ได้ +2.5%')}
+/* การ์ดอธิบายเป้าหมายรายคน — แตะกล่อง "ยังขาด/ครบเป้า" ในหน้า "ของฉัน" เพื่อเปิด
+   cats = จำนวนที่นับได้แล้วรายประเภท · pend (ไม่บังคับ) = {wait,work} เรื่องที่ยังค้าง */
+function targetExplainHtml(cats,pend){
+  const left=CAT_KEYS.reduce((s,k)=>s+Math.max(0,catTarget(k)-(cats[k]||0)),0);
+  const msg = left===0
+    ? '🎉 <b>ครบเป้าแล้วทุกประเภท</b> — ส่งเพิ่มได้เรื่อย ๆ ส่วนที่เกินจะแสดงเป็น <b>+n</b> บนแดชบอร์ด'
+    : `ยังขาดอีก <b>${left}</b> เรื่องจึงจะครบเป้าปีนี้ — ส่งเกินประเภทหนึ่ง<b>ไม่ชดเชย</b>อีกประเภท`;
+  const chk=(ok,label,val,tgt)=>`<div class="info-chk"><span>${ok?'✅':'⭕'}</span><span>${label} <b>${val}/${tgt}</b> เรื่อง</span>
+    <span class="pct" style="color:${ok?'var(--green)':'var(--muted2)'}">${ok?'ครบแล้ว':'ขาด '+(tgt-val)}</span></div>`;
+  return `<div class="info-wrap">
+    <div style="font-weight:800;font-size:13.5px">🎯 เป้าหมายของคุณ ${personTarget()} เรื่อง/ปี</div>
+    <div class="sub" style="margin:6px 0 10px">${msg}</div>
+    ${CAT_KEYS.map(k=>chk((cats[k]||0)>=catTarget(k),esc(catLabel(k)),cats[k]||0,catTarget(k))).join('')}
     ${pendExplainHtml(cats,pend)}
-    <table class="bonus-tbl">
-      <tr><th>ผลงาน PSIF ของคุณ</th><th>ส่วน PSIF</th><th>โบนัสรวม*</th></tr>
-      ${lvl(b===0,'0%','95%','ยังไม่ครบประเภทใด')}
-      ${lvl(b===2.5,'2.5%','97.5%','ครบ Near miss หรือ Behavior 1 ประเภท')}
-      ${lvl(b===5,'5%','100%','ครบ PSIF (Con) · หรือครบ Near miss + Behavior')}
-      ${lvl(b===7.5,'7.5%','102.5%','ครบ PSIF (Con) + อีก 1 ประเภท')}
-      ${lvl(b===10,'10%','105% 🎉','ครบทั้ง 3 ประเภท')}
-    </table>
-    <div class="note" style="margin-top:8px;font-size:11.5px">
-      ❓ <b>"ทำครบแล้ว ทำไมขึ้น 10% ไม่ใช่ 100%?"</b><br>
-      → แอปนี้แสดงเฉพาะ <b>"ส่วนของ PSIF"</b> ซึ่งเต็มที่คือ 10% — อีก 95% มาจาก KPI งานอื่นของคุณ เมื่อรวมกัน คนที่ทำ PSIF ครบ 3 ประเภทจะได้ <b>105%</b> (มากกว่าเป้าปกติ 100%)<br>
-      <span class="sub">*โบนัสรวมคิดจากกรณีที่ KPI งานอื่นได้เต็ม 95%</span>
-    </div>
+    <div class="sub" style="margin-top:10px">⚖️ นับเฉพาะเรื่องที่ <b>Safety อนุมัติ</b> และ <b>ดำเนินการจนจบ</b> เท่านั้น ·
+      🚫 TENNECO Clean Air <b>ไม่มีการคิดโบนัส</b> จาก PSIF</div>
   </div>`;
 }
-/* 2026-08-03 (v1.9): กล่อง "เรื่องที่ค้างอยู่" ในป๊อปอัพโบนัส — ตอบว่า "ถ้า Safety อนุมัติจะได้เพิ่มกี่ %"
+/* กล่อง "เรื่องที่ค้างอยู่" — ตอบว่า "ถ้า Safety อนุมัติครบ จะครบเป้าไหม"
    pend = {wait:{cat→n}, work:{cat→n}} · คืนค่าว่างเมื่อไม่มีเรื่องค้าง */
 function pendExplainHtml(cats,pend){
   if(!pend) return '';
@@ -805,20 +742,21 @@ function pendExplainHtml(cats,pend){
   const nW=CAT_KEYS.reduce((s,k)=>s+(w[k]||0),0), nP=CAT_KEYS.reduce((s,k)=>s+(p[k]||0),0);
   if(!(nW+nP)) return '';
   const pot=newCatMap(); CAT_KEYS.forEach(k=>pot[k]=(cats[k]||0)+(w[k]||0)+(p[k]||0));
-  const now=bonusFromCats(cats), max=bonusFromCats(pot);
+  const now=CAT_KEYS.reduce((s,k)=>s+Math.max(0,catTarget(k)-(cats[k]||0)),0);
+  const best=CAT_KEYS.reduce((s,k)=>s+Math.max(0,catTarget(k)-pot[k]),0);
   const rows=CAT_KEYS.filter(k=>(w[k]||0)+(p[k]||0)>0).map(k=>
-    `<div class="bonus-chk"><span>⏳</span><span>${esc(catLabel(k))} ตอนนี้ <b>${cats[k]||0}/${CAT_TARGET}</b>
+    `<div class="info-chk"><span>⏳</span><span>${esc(catLabel(k))} ตอนนี้ <b>${cats[k]||0}/${catTarget(k)}</b>
       — ค้างอีก <b>${(w[k]||0)+(p[k]||0)}</b> เรื่อง</span>
-      <span class="pct" style="color:var(--blue)">ถ้าผ่าน → ${pot[k]}/${CAT_TARGET}</span></div>`).join('');
+      <span class="pct" style="color:var(--blue)">ถ้าผ่าน → ${pot[k]}/${catTarget(k)}</span></div>`).join('');
   return `<div class="warn" style="margin-top:10px">⏳ <b>เรื่องที่ส่งแล้วแต่ยังไม่นับ</b>
       ${nW?`· รอ Safety พิจารณา <b>${nW}</b> เรื่อง`:''}${nP?` · กำลังดำเนินการ <b>${nP}</b> เรื่อง`:''}<br>
-      ${max>now?`ถ้าผ่านและปิดงานครบทุกเรื่อง ส่วน PSIF ของคุณจะขยับจาก <b>${now}%</b> → <b>${max}%</b> (โบนัสรวม ${KPI_OTHER_PCT+max}%)`
-               :`ถึงผ่านครบทุกเรื่อง ส่วน PSIF ยังเท่าเดิมที่ <b>${now}%</b> — ต้องเพิ่มประเภทที่ยังไม่ครบ ${CAT_TARGET} เรื่อง`}
+      ${best<now?`ถ้าผ่านและปิดงานครบทุกเรื่อง จะเหลือขาดจาก <b>${now}</b> → <b>${best}</b> เรื่อง${best===0?' (ครบเป้า)':''}`
+               :`ถึงผ่านครบทุกเรื่อง ก็ยังขาด <b>${now}</b> เรื่อง — ต้องส่งเพิ่มในประเภทที่ยังไม่ครบ`}
     </div>${rows}`;
 }
-/* 2026-07-18: คำอธิบายโบนัสเป็น popup — แตะกล่อง "โบนัส" ในหน้า "ของฉัน" เพื่อเปิด */
-let _myBonusCats=null, _myPendCats=null;
-function openBonusInfo(){ if(!_myBonusCats) return; openModal('🧮 คำอธิบายโบนัสของคุณ', bonusExplainHtml(_myBonusCats,_myPendCats)); }
+/* คำอธิบายเป้าหมายเป็น popup — แตะกล่องสรุปในหน้า "ของฉัน" เพื่อเปิด */
+let _myTargetCats=null, _myPendCats=null;
+function openTargetInfo(){ if(!_myTargetCats) return; openModal('🎯 เป้าหมายของคุณ', targetExplainHtml(_myTargetCats,_myPendCats)); }
 
 /* ---------------- toast / loading ---------------- */
 let _toastT;
@@ -852,7 +790,7 @@ const online = () => !!API;
  * ==================================================================== */
 const DEMO_KEY='psifca_demo';
 function demoLoad(){ const d=LS.get(DEMO_KEY,null); if(d){ Object.assign(state,d); state.notifications=state.notifications||[]; }
-  else { Object.assign(state,{employees:DEFAULT_EMP,areas:DEFAULT_AREAS,categories:FIXED_CATS,targets:[{year:yr(),per_person_target:6}],issuances:[],items:[],notifications:[]}); demoSave(); }
+  else { Object.assign(state,{employees:DEFAULT_EMP,areas:DEFAULT_AREAS,categories:FIXED_CATS,targets:[{year:yr(),per_person_target:5,t_psif:2,t_near_miss:2,t_behavior:1,plant_target:425}],issuances:[],items:[],notifications:[]}); demoSave(); }
   state.categories=FIXED_CATS; }
 function demoSave(){ if(!online()) LS.set(DEMO_KEY,{employees:state.employees,areas:state.areas,categories:state.categories,targets:state.targets,issuances:state.issuances,items:state.items,notifications:state.notifications}); }
 
@@ -989,9 +927,11 @@ async function bulkEmployees(mode,rows,onProgress){
   }
   return {done,failed,moved,errors};
 }
-async function setTarget(year,n){
-  if(online()) await api('/targets',{body:{year,per_person_target:n}});
-  const t=state.targets.find(x=>x.year==year); if(t)t.per_person_target=n; else state.targets.push({year,per_person_target:n}); demoSave();
+async function setTarget(t){
+  if(online()) await api('/targets',{body:t});
+  const i=state.targets.findIndex(x=>x.year==t.year);
+  if(i>=0) state.targets[i]={...state.targets[i],...t}; else state.targets.push({...t});
+  demoSave();
 }
 async function addIssuance(vsm,year){
   if(online()){ const d=await api('/issuances',{body:{vsm,year,requested_by:CURRENT_USER.id}}); state.issuances.push({id:d.id,vsm,year,requested_by:CURRENT_USER.id}); }
@@ -2128,11 +2068,29 @@ function renderSafety(){
 /* ====================================================================
  *  PERSON SUMMARY (ใช้คำนวณโบนัส + ส่งออก CSV — req #2: ไม่มีหน้ารายงานแล้ว)
  * ==================================================================== */
-function targetFor(y){ const t=state.targets.find(x=>x.year==y); return t?t.per_person_target:6; }
-/* เป้าหมายใหม่รายคน/ปี: PSIF(Con) 2 · Near miss 2 · PSIF(Behavior) 2 (รวม 6)
+/* ---------------- เป้าหมายของ TENNECO Clean Air ----------------
+   เป้ารายคน/ปี ตั้ง "แยกรายประเภท" (ส่งเกินประเภทหนึ่งไม่ชดเชยอีกประเภท):
+     PSIF Cardinal Rules 2 · Near Miss 2 · พฤติกรรมตามกิจกรรมเสี่ยงสูง 1  → รวม 5 เรื่อง/คน/ปี
+   Target Plant = 425 เรื่อง/ปี (= 5 × 85 คน) — ตัวเลขที่ตกลงกันไว้ ไม่ผูกกับหัวคนที่เปลี่ยนระหว่างปี
+   ค่าทั้งหมดเก็บรายปีในตาราง targets (t_psif · t_near_miss · t_behavior · plant_target)
+   แก้ได้ที่ ⚙️ ตั้งค่า → เป้าหมาย · ถ้าปีนั้นยังไม่มีแถว จะใช้ค่ามาตรฐานด้านล่าง
    CAT_KEYS = ค่าที่เก็บใน DB, เรียงตามลำดับที่ต้องการแสดง (req #4) */
-const CAT_TARGET=2;
 const CAT_KEYS=['PSIF','Near miss','Behavior'];
+const CAT_TARGET_FALLBACK={'PSIF':2,'Near miss':2,'Behavior':1};
+const CAT_TARGET_COL={'PSIF':'t_psif','Near miss':'t_near_miss','Behavior':'t_behavior'};
+const PLANT_TARGET_FALLBACK=425;
+/* แถวเป้าหมายของปีนั้น — ไม่มีก็ถอยไปใช้ของปีปัจจุบัน แล้วค่อยใช้ค่ามาตรฐาน */
+function targetRow(y){ return state.targets.find(x=>x.year==y) || state.targets.find(x=>x.year==yr()) || null; }
+function catTarget(k,y){
+  const t=targetRow(y==null?yr():y), v=t?t[CAT_TARGET_COL[k]]:null;
+  return (v==null||v==='')? (CAT_TARGET_FALLBACK[k]||0) : (+v||0);
+}
+function personTarget(y){ return CAT_KEYS.reduce((s,k)=>s+catTarget(k,y),0); }
+function plantTargetFor(y){ const t=targetRow(y), v=t?t.plant_target:null;
+  return (v==null||v===''||!+v)? PLANT_TARGET_FALLBACK : +v; }
+/* ยังขาดอีกกี่เรื่องจึงครบทุกประเภท (ตรรกะกลางที่ทุกหน้าจอ/รายงานใช้ร่วมกัน) */
+function leftOf(cats,y){ return CAT_KEYS.reduce((s,k)=>s+Math.max(0,catTarget(k,y)-((cats||{})[k]||0)),0); }
+function targetFor(y){ return personTarget(y); }
 function newCatMap(){ return {PSIF:0,'Near miss':0,Behavior:0}; }
 /* พนักงานที่มองเห็นตามสิทธิ์ (ข้อ 3): Admin แผนก เห็นเฉพาะแผนกตัวเอง — คนอื่นเห็นทั้งหมด */
 /* ไม่รวม "ช่องว่าง" ข้อมูลพนักงานลาออก — เป็นที่เก็บข้อมูล ไม่ใช่หัวคน (Target/คน จึงคงที่) */
@@ -2150,7 +2108,10 @@ function computePerson(y){
     // ข้อ 4: done / cats (ใช้คิดเป้า+โบนัส) นับเฉพาะ Safety อนุมัติ + จบงาน เท่านั้น
     if(isCounted(r)){ m.done++; if(m.cats[r.category]!=null) m.cats[r.category]++; }
   });
-  return {target,people:Object.values(map).map(m=>{m.isBucket=isBucketId(m.id);m.missing=Math.max(0,target-m.done);m.bonus=bonusFromCats(m.cats);return m;}).sort((a,b)=>b.bonus-a.bonus||b.submitted-a.submitted||b.done-a.done)};
+  // "ขาด" นับรายประเภท (ส่งเกินประเภทหนึ่งไม่ชดเชยอีกประเภท) · ช่องว่างพนักงานลาออกไม่มีเป้า
+  return {target,people:Object.values(map).map(m=>{ m.isBucket=isBucketId(m.id);
+    m.left=m.isBucket?0:leftOf(m.cats,y); m.missing=m.left; return m;
+  }).sort((a,b)=>b.done-a.done||b.submitted-a.submitted)};
 }
 
 /* ====================================================================
@@ -2204,14 +2165,14 @@ function statusDonut(rows,total){
   </div>`;
 }
 /* แต่ละ VSM/หน่วยงาน = 3 แท่งแนวนอนเทียบ Target (req #3)
-   rows: [{dept, head, act:{PSIF,'Near miss',Behavior,total}}]  ·  target/ประเภท = CAT_TARGET × จำนวนคน
+   rows: [{dept, head, act:{PSIF,'Near miss',Behavior,total}}]  ·  target/ประเภท = เป้าประเภทนั้น × จำนวนคน
    สีตามความคืบหน้า (req: แถบสีแบบกราฟรายเดือน): ฟ้า = ยังไม่ถึงเป้า · เขียว = ครบเป้า
    ถ้าเกินเป้า แท่งยืดตามจำนวนจริง มีเส้นประเหลืองคั่นที่จุดเป้า + ตัวเลขแดง +n */
-const TBAR_ORDER=[['PSIF','PSIF (Con)'],['Behavior','PSIF (Behavior)'],['Near miss','Near miss']];
+const TBAR_ORDER=['PSIF','Behavior','Near miss'];
 function deptTargetBars(rows){
   return rows.map(r=>{
-    const tgt=CAT_TARGET*(r.head||0);
-    const bars=TBAR_ORDER.map(([key,lbl])=>{
+    const bars=TBAR_ORDER.map(key=>{
+      const lbl=catLabel(key), tgt=catTarget(key)*(r.head||0);
       const a=r.act[key]||0;
       const over=tgt>0 && a>tgt;
       const met=tgt>0 && a>=tgt;
@@ -2228,7 +2189,7 @@ function deptTargetBars(rows){
         <span class="tbar-num ${over?'over':''}">${numTxt}</span>
       </div>`;
     }).join('');
-    const headTxt = r.head?`${r.head} คน · เป้า ${tgt}/ประเภท`:`${r.act.total} เรื่อง`;
+    const headTxt = r.head?`${r.head} คน · เป้ารวม ${(personTarget()*r.head).toLocaleString()} เรื่อง`:`${r.act.total} เรื่อง`;
     const drill = canDrill(r.dept)?`<button class="drill" data-d="${esc(r.dept)}" onclick="openTeam(this.dataset.d)">👥 รายคน</button>`:'';
     return `<div class="vgroup">
       <div class="vgroup-h"><b>${esc(r.dept)}</b>${drill}<span class="vgroup-s">${headTxt}</span></div>
@@ -2281,9 +2242,11 @@ function renderDash(){
   // v2.4: เรื่องที่ "ส่งกลับให้แก้ไข" ยังไม่ผ่าน Safety → อยู่ตัวรองเหมือนเรื่องที่รอตรวจ
   const subMain=pipeC.counted+pipeC.work, subSide=pipeC.wait+pipeC.back+pipeC.fail;
   _dashSubm={...pipeC,main:subMain,side:subSide,total};   // ใช้ตอนแตะไทล์ → popup คำอธิบาย
-  const target=targetFor(y);
+  const target=personTarget(y);
   const empCount=visibleEmployees().length||1;
-  const plantTarget=target*empCount;
+  const calcTarget=target*empCount;                                  // เป้าที่คำนวณจากหัวคนจริงตอนนี้
+  // Target Plant = ตัวเลขที่ตั้งไว้ (Clean Air = 425) · Admin แผนกเห็นเฉพาะแผนกตัวเอง → ใช้ค่าที่คำนวณจากหัวคนในแผนก
+  const plantTarget=isDeptAdmin()? calcTarget : plantTargetFor(y);
   const pctSub=Math.min(100,Math.round(subMain/plantTarget*100));     // % ของเป้า — นับเฉพาะตัวหลัก
   const pct=Math.min(100,Math.round(counted/plantTarget*100));        // % ผลงานที่นับจริง เทียบเป้า
 
@@ -2294,7 +2257,6 @@ function renderDash(){
   // แยกตามประเภท — นับเฉพาะที่ผ่านเกณฑ์ข้อ 4
   const countedItems=items.filter(isCounted);
   const catSub=newCatMap(); countedItems.forEach(i=>{ if(catSub[i.category]!=null)catSub[i.category]++; });
-  const catTarget=CAT_TARGET*empCount;
 
   // แยกตามหน่วยงาน แยกเป็น 3 ประเภทเทียบ Target — นับเฉพาะที่ผ่านเกณฑ์ข้อ 4
   const deptRows=deptTargetData(countedItems);
@@ -2307,7 +2269,7 @@ function renderDash(){
   const hero=`<div class="card dash-hero">
     <div class="dh-title">🏭 ${isDeptAdmin()?esc(myVsm()||'แผนกของฉัน'):'TENNECO Clean Air'} · ปี ${y}</div>
     <div class="dh-tiles">
-      <div class="dh-tile target"><div class="dh-l">Target</div><div class="dh-n">${plantTarget.toLocaleString()}</div><div class="dh-s">${target} เรื่อง/คน/ปี × ${empCount.toLocaleString()} คน</div></div>
+      <div class="dh-tile target"><div class="dh-l">Target Plant</div><div class="dh-n">${plantTarget.toLocaleString()}</div><div class="dh-s">${target} เรื่อง/คน/ปี × ${empCount.toLocaleString()} คน = ${calcTarget.toLocaleString()}</div></div>
       <div class="dh-tile subm" onclick="openSubmitInfo()" title="แตะดูคำอธิบาย"><div class="dh-l">ส่งแล้ว · ผ่าน Safety ℹ️</div>
         <div class="dh-n">${subMain.toLocaleString()}${subSide?`<span class="side">+${subSide.toLocaleString()}</span>`:''}</div>
         <div class="dh-s">${pctSub}% ของเป้าหมาย</div>
@@ -2320,7 +2282,7 @@ function renderDash(){
 
   const monthCard=`<div class="card"><h3>📅 ส่งรายเดือน — ปี ${y}</h3>${monthChart(months,plantTarget/12)}</div>`;
   const catCard=dashTargetTable('🏷️ ประเภทของจุดเสี่ยงหรืออันตราย (PSIF) — นับเฉพาะอนุมัติ+จบงาน','ประเภท',
-    CAT_KEYS.map(k=>({label:catLabel(k),target:catTarget,actual:catSub[k]})));
+    CAT_KEYS.map(k=>({label:catLabel(k),target:catTarget(k,y)*empCount,actual:catSub[k]})));
   const statusCard=`<div class="card"><h3>📊 สถานะงาน</h3>${statusDonut([
       {label:'รอ Safety',   val:c.recorded,   color:'var(--blue)'},
       {label:'ส่งกลับให้แก้ไข', val:c.returned,  color:'var(--rose)'},
@@ -2329,7 +2291,7 @@ function renderDash(){
       {label:'เสร็จ',        val:c.done,       color:'var(--green)'},
       {label:'ไม่ผ่าน (ซ้ำ/ไม่เข้าข่าย/ไม่อนุมัติ)', val:notPassed, color:'var(--red)'},
     ],total)}</div>`;
-  const tgtHint=`<div class="sub tlg" style="margin-bottom:6px">แต่ละแท่งเทียบ Target (${CAT_TARGET} เรื่อง/คน/ปี) — นับเฉพาะเรื่องที่<b>อนุมัติ+จบงาน</b> ·
+  const tgtHint=`<div class="sub tlg" style="margin-bottom:6px">แต่ละแท่งเทียบ Target รายประเภท (${CAT_KEYS.map(k=>catLabel(k)+' '+catTarget(k,y)).join(' · ')} เรื่อง/คน/ปี) — นับเฉพาะเรื่องที่<b>อนุมัติ+จบงาน</b> ·
     <i class="sw lo"></i> ยังไม่ถึงเป้า · <i class="sw ok"></i> ครบเป้า ·
     <span style="color:var(--red);font-weight:700">+n = เกินเป้า</span> (เส้นประเหลือง = จุดเป้า)</div>`;
   const vsmCard=vsmRows.length?`<div class="card"><h3>🏭 VSM — แยกตามประเภท</h3>${tgtHint}${deptTargetBars(vsmRows)}</div>`:'';
@@ -2344,9 +2306,9 @@ function renderDash(){
 let _dashSubm=null;
 function openSubmitInfo(){
   const d=_dashSubm; if(!d) return;
-  const row=(ic,lbl,n,note)=>`<div class="bonus-chk"><span>${ic}</span><span>${lbl} <b>${n.toLocaleString()}</b> เรื่อง</span>
+  const row=(ic,lbl,n,note)=>`<div class="info-chk"><span>${ic}</span><span>${lbl} <b>${n.toLocaleString()}</b> เรื่อง</span>
     <span class="pct" style="color:var(--muted2)">${note}</span></div>`;
-  openModal('📥 ยอด "ส่งแล้ว" นับอย่างไร', `<div class="bonus-wrap">
+  openModal('📥 ยอด "ส่งแล้ว" นับอย่างไร', `<div class="info-wrap">
     <div style="font-weight:800;font-size:13.5px">ตัวเลขใหญ่ = เฉพาะเรื่องที่ผ่าน Safety แล้ว (${d.main.toLocaleString()} เรื่อง)</div>
     <div class="sub" style="margin:6px 0 10px">เรื่องที่เข้ามาทั้งหมด ${d.total.toLocaleString()} เรื่อง — แต่<b>เป้าหมายนับเฉพาะตัวหลัก</b>
       เพราะเรื่องที่ยังไม่ผ่าน Safety หรือไม่ผ่านการพิจารณา ยังไม่ถือเป็นผลงานของโรงงาน</div>
@@ -2369,7 +2331,7 @@ function renderMyDash(y){
   // ข้อ 4: เป้า/โบนัสนับเฉพาะเรื่องที่ Safety อนุมัติ + จบงาน
   const counted=mine.filter(isCounted);
   const cat=newCatMap(); counted.forEach(i=>{ if(cat[i.category]!=null)cat[i.category]++; });
-  const done=counted.length, bonus=bonusFromCats(cat);
+  const done=counted.length;
   /* v1.9: แยกเรื่องที่ส่งแล้วแต่ยังไม่นับ เป็น 3 กลุ่ม (รอ Safety / กำลังดำเนินการ / ไม่ผ่าน)
      พนักงานเคยสับสนว่า "ลงไปแล้วทำไมตัวเลขไม่ขึ้น" — ต้องเห็นว่าค้างอยู่ขั้นไหน และถ้าผ่านจะได้กี่เรื่อง */
   const pipe={wait:newCatMap(),work:newCatMap(),back:newCatMap(),fail:newCatMap()};
@@ -2379,26 +2341,28 @@ function renderMyDash(y){
   const nWait=_myPipe.wait.length, nWork=_myPipe.work.length, nFail=_myPipe.fail.length, nBack=_myPipe.back.length;
   // ถ้าเรื่องที่ยังค้าง (รอ Safety + กำลังดำเนินการ + ส่งกลับให้แก้ไข) ผ่านครบทั้งหมด จะนับได้กี่เรื่อง / โบนัสเท่าไร
   const potCat=newCatMap(); CAT_KEYS.forEach(k=>potCat[k]=cat[k]+pipe.wait[k]+pipe.work[k]+pipe.back[k]);
-  const potDone=done+nWait+nWork+nBack, potBonus=bonusFromCats(potCat);
-  _myBonusCats=cat;   // ใช้ตอนแตะกล่องโบนัส → popup คำอธิบาย (openBonusInfo)
+  const potDone=done+nWait+nWork+nBack;
+  const myLeft=leftOf(cat,y), potLeft=leftOf(potCat,y);   // ยังขาดกี่เรื่อง · ถ้าเรื่องค้างผ่านครบจะเหลือขาดเท่าไร
+  _myTargetCats=cat;  // ใช้ตอนแตะกล่องสรุป → popup คำอธิบายเป้าหมาย (openTargetInfo)
   _myPendCats={wait:pipe.wait,work:pipe.work};
 
-  const seg=n=>Math.max(0,Math.min(100,Math.round(n/CAT_TARGET*100)));
+  const seg=(x,T)=>Math.max(0,Math.min(100,Math.round(x/(T||1)*100)));
   const catBar=k=>{
-    const v=cat[k], w=pipe.wait[k], p=pipe.work[k], f=pipe.fail[k], b=pipe.back[k], ok=v>=CAT_TARGET, pend=w+p+b;
+    const T=catTarget(k,y);
+    const v=cat[k], w=pipe.wait[k], p=pipe.work[k], f=pipe.fail[k], b=pipe.back[k], ok=v>=T, pend=w+p+b;
     // เรื่องที่ถูกส่งกลับก็ยัง "ค้างอยู่" เหมือนรอ Safety — รวมไว้ในแถบลายเดียวกัน แต่แยกป้ายให้เห็นว่าต้องลงมือ
-    const wDone=seg(v), wWork=Math.min(100-wDone,seg(p)), wWait=Math.min(100-wDone-wWork,seg(w+b));
+    const wDone=seg(v,T), wWork=Math.min(100-wDone,seg(p,T)), wWait=Math.min(100-wDone-wWork,seg(w+b,T));
     const tag=(cls,txt)=>`<span class="ptag ${cls}">${txt}</span>`;
     const tags=[
       w?tag('t-wait',`⏳ รอ Safety ${w} เรื่อง`):'',
       p?tag('t-work',`🔧 กำลังดำเนินการ ${p} เรื่อง`):'',
       b?tag('t-back',`↩️ ส่งกลับให้แก้ไข ${b} เรื่อง`):'',
       f?tag('t-fail',`✖️ ไม่ผ่าน ${f} เรื่อง`):'',
-      pend?tag('t-gain',`🎯 ถ้าผ่านครบ → ${potCat[k]}/${CAT_TARGET}${(potCat[k]>=CAT_TARGET&&!ok)?' ครบเป้า':''}`):'',
+      pend?tag('t-gain',`🎯 ถ้าผ่านครบ → ${potCat[k]}/${T}${(potCat[k]>=T&&!ok)?' ครบเป้า':''}`):'',
     ].join('');
     return `<div class="mycat">
       <div class="mycat-h"><span class="cap">${esc(catLabel(k))}</span>
-        <span class="num" style="color:${ok?'var(--green)':'var(--muted)'}">${v}/${CAT_TARGET}${pend?` <span style="color:var(--muted2)">+${pend} รอ</span>`:''}</span></div>
+        <span class="num" style="color:${ok?'var(--green)':'var(--muted)'}">${v}/${T}${pend?` <span style="color:var(--muted2)">+${pend} รอ</span>`:''}</span></div>
       <div class="track">
         <div class="f done ${ok?'ok':''}" style="width:${wDone}%"></div>
         <div class="f work" style="width:${wWork}%"></div>
@@ -2418,10 +2382,10 @@ function renderMyDash(y){
       <div class="grid g3" style="margin:2px 0 12px">
         <div class="stat blue"><div class="n">${mine.length}</div><div class="l">ส่งแล้ว</div></div>
         <div class="stat green"><div class="n">${done}</div><div class="l">นับผลงาน (อนุมัติ+จบ)</div>${potDone>done?`<div class="l2">ถ้าเรื่องที่ค้างผ่านครบ → ${potDone} เรื่อง</div>`:''}</div>
-        <div class="stat orange" onclick="openBonusInfo()" style="cursor:pointer"><div class="n">${bonus}%</div><div class="l">โบนัสส่วน PSIF — แตะดูคำอธิบาย ℹ️</div>${potBonus>bonus?`<div class="l2">ถ้าเรื่องที่ค้างผ่านครบ → ${potBonus}%</div>`:''}</div>
+        <div class="stat orange" onclick="openTargetInfo()" style="cursor:pointer"><div class="n">${myLeft===0?'✓':myLeft}</div><div class="l">${myLeft===0?'ครบเป้าแล้ว':'ยังขาด (เรื่อง)'} — แตะดูคำอธิบาย ℹ️</div>${(myLeft>0&&potLeft<myLeft)?`<div class="l2">ถ้าเรื่องที่ค้างผ่านครบ → ขาด ${potLeft}</div>`:''}</div>
       </div>
       ${pipeRow}
-      <div class="sub tlg" style="margin-bottom:8px">🎯 เป้าหมาย ${CAT_TARGET} เรื่อง/ประเภท/ปี — <b>นับเฉพาะเรื่องที่ Safety อนุมัติและจบงานแล้ว</b><br>
+      <div class="sub tlg" style="margin-bottom:8px">🎯 เป้าหมายปี ${y}: ${CAT_KEYS.map(k=>esc(catLabel(k))+' <b>'+catTarget(k,y)+'</b>').join(' · ')} เรื่อง/คน/ปี (รวม <b>${personTarget(y)}</b>) — <b>นับเฉพาะเรื่องที่ Safety อนุมัติและจบงานแล้ว</b><br>
         เรื่องที่ส่งแล้วแต่ยังไม่นับจะแสดงเป็น<b>แถบลาย</b>ในกราฟ (<i class="sw" style="background:repeating-linear-gradient(45deg,#E4D7FB 0 4px,#CFB9F6 4px 8px)"></i> กำลังดำเนินการ ·
         <i class="sw" style="background:repeating-linear-gradient(45deg,#FCE3BE 0 4px,#F7CD94 4px 8px)"></i> รอ Safety) — <b>ไม่หาย</b> แค่ยังไม่ครบเงื่อนไข</div>
       ${CAT_KEYS.map(catBar).join('')}
@@ -2460,7 +2424,7 @@ function renderMgr(){
   const {people}=computePerson(y);
   const mgrs=people.filter(p=>mgrIds.has(p.id));
   mgrs.forEach(p=>{ p.showVsm=true;
-    p.left=CAT_KEYS.reduce((s,k)=>s+Math.max(0,CAT_TARGET-(p.cats[k]||0)),0); });
+    p.left=leftOf(p.cats,y); });
   const by={
     done:(a,b)=>b.done-a.done||b.submitted-a.submitted||(a.name||'').localeCompare(b.name||'','th'),
     sub:(a,b)=>b.submitted-a.submitted||b.done-a.done,
@@ -2483,7 +2447,7 @@ function renderMgr(){
           <option value="name" ${mgrSort==='name'?'selected':''}>เรียง: ชื่อ ก → ฮ</option>
         </select>
       </div>
-      <div class="sub" style="margin-bottom:8px">เป้า ${CAT_TARGET} เรื่อง/ประเภท (รวม ${PERSON_TARGET}/คน/ปี) · นับเฉพาะเรื่องที่<b>อนุมัติ+จบงาน</b></div>
+      <div class="sub" style="margin-bottom:8px">เป้า ${CAT_KEYS.map(k=>esc(catLabel(k))+' '+catTarget(k,y)).join(' · ')} (รวม ${personTarget(y)}/คน/ปี) · นับเฉพาะเรื่องที่<b>อนุมัติ+จบงาน</b></div>
       ${mgrs.length?mgrs.map(p=>personRow(p)).join(''):'<div class="empty"><span class="ic">👨‍💼</span>ยังไม่มีพนักงานที่ตั้งสิทธิ์เป็น Manager — ตั้งได้ที่เมนูตั้งค่า → พนักงาน</div>'}
     </div>`;
 }
@@ -2501,16 +2465,15 @@ function canDrill(dept){
   if(CURRENT_USER.role==='teamleader') return myVsm()===dept;
   return false;
 }
-const CAT_SHORT={'PSIF':'Con','Behavior':'Beh','Near miss':'NM'};
-const PERSON_TARGET=CAT_TARGET*CAT_KEYS.length;   // 6 เรื่อง/คน/ปี (2 ต่อประเภท)
+const CAT_SHORT={'PSIF':'CR','Behavior':'BEH','Near miss':'NM'};   // CR = Cardinal Rules · BEH = พฤติกรรมเสี่ยงสูง
 let teamDept=null, teamYear=null, teamQ='', teamSort='left', teamPage=1;
 function teamPeople(){
   const {people}=computePerson(teamYear);
   const key=d=>(d||'').trim()||'(ไม่ระบุ)';
   const group=people.filter(p=>key(p.vsm)===teamDept);
-  // เหลือ = ยังขาดอีกกี่เรื่องจึงครบเป้าทุกประเภท (นับตามประเภท 2/2/2 — ส่งเกินประเภทหนึ่งไม่ชดเชยอีกประเภท)
+  // เหลือ = ยังขาดอีกกี่เรื่องจึงครบเป้าทุกประเภท (นับตามประเภท 2/2/1 — ส่งเกินประเภทหนึ่งไม่ชดเชยอีกประเภท)
   // ช่องว่าง (ข้อมูลพนักงานลาออก) ไม่มีเป้า — ตั้ง "เหลือ" = 0 และไม่นับรวมในสรุปจำนวนคน
-  group.forEach(p=>{ p.left=p.isBucket?0:CAT_KEYS.reduce((s,k)=>s+Math.max(0,CAT_TARGET-(p.cats[k]||0)),0); });
+  group.forEach(p=>{ p.left=p.isBucket?0:leftOf(p.cats,teamYear); });
   const q=norm(teamQ);
   let arr=q? group.filter(p=>norm((p.name||'')+' '+(p.id||'')).includes(q)) : group.slice();
   const by={
@@ -2534,11 +2497,13 @@ function personRow(p){
       <div class="prow-meta"><span>ส่ง <b>${p.submitted}</b></span><span>ผ่านเกณฑ์ <b>${p.done}</b></span>${cats}</div>
     </div>`;
   }
-  const got=PERSON_TARGET-p.left;
-  const pct=Math.round(got/PERSON_TARGET*100);
+  const PT=personTarget(teamYear)||1;
+  const got=PT-p.left;
+  const pct=Math.round(got/PT*100);
   const ok=p.left===0;
   const cats=CAT_KEYS.map(k=>{ const v=p.cats[k]||0;
-    return `<span class="pcat ${v>=CAT_TARGET?'ok':''}">${CAT_SHORT[k]} ${v}/${CAT_TARGET}</span>`; }).join('');
+    const T=catTarget(k,teamYear);
+    return `<span class="pcat ${v>=T?'ok':''}">${CAT_SHORT[k]} ${v}/${T}</span>`; }).join('');
   return `<div class="prow">
     <div class="prow-h">
       <div class="prow-nm"><b>${esc(p.name)}</b> <span class="sub">${esc(p.id)}${p.showVsm&&p.vsm?' · '+esc(p.vsm):''}</span></div>
@@ -2562,7 +2527,7 @@ function openTeam(dept){
       </select>
     </div>
     <button class="btn btn-green btn-sm btn-block" style="margin-bottom:8px" onclick="exportTeamXlsx(teamDept,teamYear)">📊 Export Excel — รายงานรายคน</button>
-    <div class="sub" style="margin-bottom:8px">เป้า ${CAT_TARGET} เรื่อง/ประเภท (รวม ${PERSON_TARGET}/คน/ปี) · “เหลือ” = ยังขาดอีกกี่เรื่องจึงครบทุกประเภท · นับเฉพาะเรื่องที่<b>อนุมัติ+จบงาน</b><br>
+    <div class="sub" style="margin-bottom:8px">เป้า ${CAT_KEYS.map(k=>esc(catLabel(k))+' '+catTarget(k,teamYear)).join(' · ')} (รวม ${personTarget(teamYear)}/คน/ปี) · “เหลือ” = ยังขาดอีกกี่เรื่องจึงครบทุกประเภท · นับเฉพาะเรื่องที่<b>อนุมัติ+จบงาน</b><br>
       ไฟล์ Excel มี 3 ชีต: <b>รายคน</b> (ครบ/ขาด แยกประเภท) · <b>สรุปตามประเภท</b> · <b>ต้องตามงาน</b> — ได้ทุกคนในกลุ่มนี้ ไม่ขึ้นกับคำค้นบนหน้าจอ</div>
     <div id="teamSum"></div>
     <div id="teamList"></div>`);
@@ -2650,11 +2615,26 @@ function renderSettings(){
       </div>
       <div class="sub" style="margin-top:8px">เปิดแล้ว: ${state.issuances.filter(i=>i.year==y).map(i=>esc(i.vsm)).join(', ')||'—'}</div>
     </div>
-    <div class="card"><h3>🎯 เป้าหมาย/คน/ปี</h3>
-      <div class="note" style="margin-bottom:8px">เป้าหมายรายคน: <b>PSIF (Con) 2</b> · <b>Near miss 2</b> · <b>PSIF (Behavior) 2</b> เรื่อง/ปี (รวม 6) — ช่องด้านล่างคือค่ารวมต่อคน/ปี ใช้คำนวณเป้าโรงงานและโบนัส<br>${BONUS_RULE_TXT}</div>
-      <div class="row"><select class="inp" id="tgtYear" style="width:auto">${[y,y+1].map(yy=>`<option>${yy}</option>`).join('')}</select>
-      <input class="inp" id="tgtN" type="number" value="${targetFor(y)}" style="width:90px">
-      <button class="btn btn-blue btn-sm" onclick="saveTarget()">บันทึก</button></div>
+    <div class="card"><h3>🎯 เป้าหมาย — TENNECO Clean Air</h3>
+      <div class="note" style="margin-bottom:8px">เป้ารายคน/ปี ตั้ง<b>แยกรายประเภท</b> — ส่งเกินประเภทหนึ่ง<b>ไม่ชดเชย</b>อีกประเภท<br>
+        ค่ามาตรฐาน: <b>PSIF Cardinal Rules 2</b> · <b>Near Miss 2</b> · <b>พฤติกรรมตามกิจกรรมเสี่ยงสูง 1</b> (รวม 5 เรื่อง/คน/ปี)<br>
+        <b>Target Plant</b> = เป้าทั้งโรงงานต่อปี — Clean Air = <b>425</b> เรื่อง (5 × 85 คน)<br>
+        ⚖️ นับเฉพาะเรื่องที่ Safety อนุมัติ + จบงาน · 🚫 ระบบนี้<b>ไม่คิดโบนัส</b>จาก PSIF</div>
+      <div class="row" style="gap:8px;align-items:center;margin-bottom:8px">
+        <span class="sub">ปี</span>
+        <select class="inp" id="tgtYear" style="width:auto" onchange="fillTargetInputs()">${[y-1,y,y+1].map(yy=>`<option ${yy===y?'selected':''}>${yy}</option>`).join('')}</select>
+      </div>
+      <div class="grid g3">
+        <div><div class="sub">PSIF Cardinal Rules</div><input class="inp" id="tgtCR" type="number" min="0" value="${catTarget('PSIF',y)}"></div>
+        <div><div class="sub">Near Miss</div><input class="inp" id="tgtNM" type="number" min="0" value="${catTarget('Near miss',y)}"></div>
+        <div><div class="sub">พฤติกรรมตามกิจกรรมเสี่ยงสูง</div><input class="inp" id="tgtBH" type="number" min="0" value="${catTarget('Behavior',y)}"></div>
+      </div>
+      <div class="row" style="gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">
+        <span class="sub">Target Plant (เรื่อง/ปี)</span>
+        <input class="inp" id="tgtPlant" type="number" min="0" value="${plantTargetFor(y)}" style="width:110px">
+        <button class="btn btn-line btn-sm" onclick="calcPlantTarget()">🧮 คำนวณจากจำนวนคน</button>
+        <button class="btn btn-blue btn-sm" onclick="saveTarget()">บันทึก</button>
+      </div>
     </div>
     <div class="card"><h3>👥 พนักงาน (${state.employees.filter(e=>!isBucketId(e.id)&&e.active!==0).length} คน)</h3>
       <button class="btn btn-blue btn-sm" onclick="editEmp()">➕ เพิ่ม/แก้ไข</button>
@@ -2679,7 +2659,26 @@ function renderSettings(){
   restoreEmpBulkBox();
 }
 async function doIssue(){ const v=$('issVsm').value; await addIssuance(v,yr()); toast('เปิดดำเนินการ '+v,'green'); renderSettings(); }
-async function saveTarget(){ await setTarget(+$('tgtYear').value,+$('tgtN').value||6); toast('บันทึกเป้าหมายแล้ว','green'); }
+/* เปลี่ยนปีในช่องเลือก → ดึงค่าเป้าของปีนั้นมาแสดง (ไม่ต้องวาดหน้าตั้งค่าใหม่ทั้งหน้า) */
+function fillTargetInputs(){
+  const ty=+$('tgtYear').value||yr();
+  $('tgtCR').value=catTarget('PSIF',ty); $('tgtNM').value=catTarget('Near miss',ty);
+  $('tgtBH').value=catTarget('Behavior',ty); $('tgtPlant').value=plantTargetFor(ty);
+}
+/* ปุ่มช่วยคิด Target Plant = (เป้ารวม/คน) × จำนวนพนักงานที่ยังทำงานอยู่ (ไม่นับช่องว่างพนักงานลาออก) */
+function calcPlantTarget(){
+  const heads=state.employees.filter(e=>!isBucketId(e.id)&&e.active!==0).length;
+  const per=(+$('tgtCR').value||0)+(+$('tgtNM').value||0)+(+$('tgtBH').value||0);
+  $('tgtPlant').value=per*heads;
+  toast(`${per} เรื่อง/คน/ปี × ${heads} คน = ${per*heads} เรื่อง`,'green');
+}
+async function saveTarget(){
+  const ty=+$('tgtYear').value||yr();
+  const t={year:ty, t_psif:+$('tgtCR').value||0, t_near_miss:+$('tgtNM').value||0,
+           t_behavior:+$('tgtBH').value||0, plant_target:+$('tgtPlant').value||0};
+  t.per_person_target=t.t_psif+t.t_near_miss+t.t_behavior;
+  await setTarget(t); toast('บันทึกเป้าหมายแล้ว','green'); refreshAll();
+}
 function restoreEmpBulkBox(){ const b=$('empBulkBox'); if(b) b.value=empBulkText; }   // renderSettings สร้าง textarea ใหม่ — เอาข้อความที่วางไว้กลับมา
 function editEmp(id){
   const e=id?state.employees.find(x=>x.id===id):{id:'',name:'',vsm:'',role:'user'};
@@ -3442,7 +3441,7 @@ function exportReportXlsx(){
  *    3) ต้องตามงาน    — เฉพาะคนที่ยังไม่ครบ เรียงขาดมาก → น้อย (เอาไว้ตามงาน)
  *  สิทธิ์: กลุ่มเดียว = ตาม canDrill (TL/Manager ของกลุ่มนั้น) · ทุกกลุ่ม = Admin แผนก/Safety/Super Admin
  * ==================================================================== */
-const XRPT_COLS=17;                                       // ชีต "รายคน" = A..Q
+const XRPT_COLS=16;                                       // ชีต "รายคน" = A..P (Clean Air ไม่มีคอลัมน์โบนัส)
 function xrow(n,s){ const a=new Array(n); for(let i=0;i<n;i++)a[i]={v:'',s:s||0}; return a; }
 function xput(row,i,v,s){ row[i]={v:v,s:s||0}; }
 function deptKey(d){ return (d||'').trim()||'(ไม่ระบุ)'; }
@@ -3462,7 +3461,7 @@ function exportTeamXlsx(dept,y){
   const bucketSub=buckets.reduce((s,p)=>s+p.submitted,0), bucketDone=buckets.reduce((s,p)=>s+p.done,0);
   if(!arr.length){ toast('ไม่มีพนักงานในกลุ่มนี้','orange'); return; }
   // ขาดรายประเภท (ส่งเกินประเภทหนึ่งไม่ชดเชยอีกประเภท) — ตรรกะเดียวกับ "เหลือ" บนหน้าจอ
-  arr.forEach(p=>{ p.lack={}; CAT_KEYS.forEach(k=>{ p.lack[k]=Math.max(0,CAT_TARGET-(p.cats[k]||0)); });
+  arr.forEach(p=>{ p.lack={}; CAT_KEYS.forEach(k=>{ p.lack[k]=Math.max(0,catTarget(k,y)-(p.cats[k]||0)); });
     p.left=CAT_KEYS.reduce((s,k)=>s+p.lack[k],0); });
   arr.sort((a,b)=> (dept?0:deptKey(a.vsm).localeCompare(deptKey(b.vsm),'th')) || b.left-a.left || (a.name||'').localeCompare(b.name||'','th'));
 
@@ -3471,7 +3470,7 @@ function exportTeamXlsx(dept,y){
   const lackTotal=arr.reduce((s,p)=>s+p.left,0);
   const who=CURRENT_USER?`${CURRENT_USER.name} (${CURRENT_USER.id})`:'-';
   const head1=`รายงาน PSIF รายคน — ${scope} (ปี ${y})`;
-  const head2=`เป้าหมาย ${CAT_TARGET} เรื่อง/ประเภท/คน/ปี (รวม ${PERSON_TARGET} เรื่อง) · “ขาด” = ยังต้องส่งอีกกี่เรื่องจึงครบประเภทนั้น · นับเฉพาะเรื่องที่ Safety อนุมัติ + จบงานแล้ว`
+  const head2=`เป้าหมาย/คน/ปี: ${CAT_KEYS.map(k=>catLabel(k)+' '+catTarget(k,y)).join(' · ')} (รวม ${personTarget(y)} เรื่อง) · “ขาด” = ยังต้องส่งอีกกี่เรื่องจึงครบประเภทนั้น · นับเฉพาะเรื่องที่ Safety อนุมัติ + จบงานแล้ว`
     +(bucketSub?` · ไม่รวมช่องว่างข้อมูลพนักงานลาออก ${bucketSub.toLocaleString()} เรื่อง (ผ่านเกณฑ์ ${bucketDone.toLocaleString()})`:'');
   const head3=`ออกรายงานโดย ${who} · ${xNowTxt()} · TENNECO Clean Air`;
 
@@ -3503,24 +3502,24 @@ function xSheetPeople(arr,o){
   const h8=xrow(N,XS.head);
   xput(h8,0,'ข้อมูลพนักงาน',XS.head); merges.push('A8:D8');
   CAT_KEYS.forEach((k,gi)=>{ const c=4+gi*2;
-    xput(h8,c,`${catLabel(k)} — เป้า ${CAT_TARGET}`,XS.head); merges.push(`${colRef(c)}8:${colRef(c+1)}8`); });
+    xput(h8,c,`${catLabel(k)} — เป้า ${catTarget(k,o.y)}`,XS.head); merges.push(`${colRef(c)}8:${colRef(c+1)}8`); });
   xput(h8,10,'สรุปผล / สถานะ',XS.head); merges.push(`K8:${LAST}8`);
   const h9=['ลำดับ','รหัสพนักงาน','ชื่อ - นามสกุล','หน่วยงาน / VSM','ทำได้','ขาด','ทำได้','ขาด','ทำได้','ขาด',
-    'เหลือรวม (เรื่อง)','ประเภทที่ยังขาด','ส่งทั้งหมด','ผ่านเกณฑ์ (อนุมัติ+จบ)','ความคืบหน้า','สถานะ','โบนัสส่วน PSIF']
+    'เหลือรวม (เรื่อง)','ประเภทที่ยังขาด','ส่งทั้งหมด','ผ่านเกณฑ์ (อนุมัติ+จบ)','ความคืบหน้า','สถานะ']
     .map(h=>({v:h,s:XS.head2}));
   rows.push(h8,h9); hts[8]=24; hts[9]=32;
   // ข้อมูลรายคน (แถบสลับสีอ่านง่าย)
+  const PT=personTarget(o.y)||1;
   arr.forEach((p,i)=>{
     const b=i%2, r=xrow(N,b?XS.txtB:XS.txt), num=b?XS.numB:XS.num, txt=b?XS.txtB:XS.txt;
     xput(r,0,i+1,num); xput(r,1,p.id||'',num); xput(r,2,p.name||'',b?XS.boldB:XS.bold); xput(r,3,deptKey(p.vsm),txt);
     CAT_KEYS.forEach((k,gi)=>{ const c=4+gi*2, got=p.cats[k]||0, lack=p.lack[k];
-      xput(r,c,got,got>=CAT_TARGET?XS.good:num); xput(r,c+1,lack,lack>0?XS.bad:num); });
+      xput(r,c,got,got>=catTarget(k,o.y)?XS.good:num); xput(r,c+1,lack,lack>0?XS.bad:num); });
     xput(r,10,p.left,p.left>0?XS.bad:XS.good);
     xput(r,11,p.left?CAT_KEYS.filter(k=>p.lack[k]>0).map(k=>`${catLabel(k)} ${p.lack[k]}`).join(' · '):'— ครบทุกประเภท —',txt);
     xput(r,12,p.submitted,num); xput(r,13,p.done,num);
-    xput(r,14,(PERSON_TARGET-p.left)/PERSON_TARGET,b?XS.pctB:XS.pct);
+    xput(r,14,(PT-p.left)/PT,b?XS.pctB:XS.pct);
     xput(r,15,p.left?`ยังขาด ${p.left} เรื่อง`:'ครบเป้าแล้ว',p.left?XS.bad:XS.good);
-    xput(r,16,p.bonus+'%',num);
     rows.push(r);
   });
   const lastData=rows.length;
@@ -3530,16 +3529,16 @@ function xSheetPeople(arr,o){
     xput(t,c,arr.reduce((s,p)=>s+(p.cats[k]||0),0),XS.tot); xput(t,c+1,arr.reduce((s,p)=>s+p.lack[k],0),XS.tot); });
   xput(t,10,o.lackTotal,XS.tot); xput(t,11,'',XS.tot);
   xput(t,12,arr.reduce((s,p)=>s+p.submitted,0),XS.tot); xput(t,13,arr.reduce((s,p)=>s+p.done,0),XS.tot);
-  xput(t,14,arr.length?(PERSON_TARGET*arr.length-o.lackTotal)/(PERSON_TARGET*arr.length):0,XS.tot);
-  xput(t,15,`ครบเป้า ${o.okN}/${arr.length} คน`,XS.tot); xput(t,16,'',XS.tot);
+  xput(t,14,arr.length?(PT*arr.length-o.lackTotal)/(PT*arr.length):0,XS.tot);
+  xput(t,15,`ครบเป้า ${o.okN}/${arr.length} คน`,XS.tot);
   rows.push(t);
   rows.push(xrow(N,XS.def));
   const note=xrow(N,XS.note);
   xput(note,0,'หมายเหตุ: ตัวเลขทั้งหมดนับเฉพาะเรื่องที่ Safety อนุมัติและดำเนินการจนจบแล้ว · '
-    +'โบนัสส่วน PSIF: ครบ PSIF (Con) ≥2 = +5% · ครบ Near miss ≥2 = +2.5% · ครบ PSIF (Behavior) ≥2 = +2.5% (สูงสุด 10% เมื่อรวมกับ KPI งานอื่น 95% = 105%)',XS.note);
+    +'ส่งเกินประเภทหนึ่งไม่ชดเชยอีกประเภท · TENNECO Clean Air ไม่มีการคิดโบนัสจาก PSIF',XS.note);
   rows.push(note); merges.push(`A${rows.length}:${LAST}${rows.length}`); hts[rows.length]=32;
   return {name:'รายคน',rows,merges,hts,freeze:{x:4,y:9},filter:`A9:${LAST}${lastData}`,
-    cols:[6,13,26,15,9,8,9,8,9,8,12,26,11,14,12,16,13]};
+    cols:[6,13,26,15,9,8,9,8,9,8,12,26,11,14,12,16]};
 }
 
 /* ---- ชีต 2: สรุปตามประเภท + แยกตามหน่วยงาน ---- */
@@ -3550,19 +3549,21 @@ function xSheetSummary(arr,o){
   const sub=xrow(N,XS.sub); xput(sub,0,o.head3,XS.sub); rows.push(sub); merges.push(`A2:${LAST}2`);
   rows.push(xrow(N,XS.def));
   // ตาราง 1 — ตามประเภท
-  const s1=xrow(N,XS.sec); xput(s1,0,'① ภาพรวมตามประเภท (เป้า 2 เรื่อง/คน/ปี ต่อประเภท)',XS.sec);
+  const s1=xrow(N,XS.sec); xput(s1,0,`① ภาพรวมตามประเภท (เป้า/คน/ปี: ${CAT_KEYS.map(k=>catLabel(k)+' '+catTarget(k,o.y)).join(' · ')})`,XS.sec);
   rows.push(s1); merges.push(`A${rows.length}:${LAST}${rows.length}`);
   const H1=['ประเภท','เป้า/คน','จำนวนคน','เป้ารวม (เรื่อง)','ทำได้ (อนุมัติ+จบ)','ขาดรวม (เรื่อง)','คนที่ครบ','คนที่ยังขาด','% คนที่ครบ'];
   rows.push(H1.map(h=>({v:h,s:XS.head}))); hts[rows.length]=30;
   CAT_KEYS.forEach((k,i)=>{
     const got=arr.reduce((s,p)=>s+(p.cats[k]||0),0), lack=arr.reduce((s,p)=>s+p.lack[k],0);
     const okc=arr.filter(p=>p.lack[k]===0).length, b=i%2, num=b?XS.numB:XS.num;
-    rows.push([{v:catLabel(k),s:b?XS.boldB:XS.bold},{v:CAT_TARGET,s:num},{v:arr.length,s:num},{v:CAT_TARGET*arr.length,s:num},
+    const T=catTarget(k,o.y);
+    rows.push([{v:catLabel(k),s:b?XS.boldB:XS.bold},{v:T,s:num},{v:arr.length,s:num},{v:T*arr.length,s:num},
       {v:got,s:num},{v:lack,s:lack>0?XS.bad:XS.good},{v:okc,s:XS.good},{v:arr.length-okc,s:arr.length-okc>0?XS.bad:XS.num},
       {v:arr.length?okc/arr.length:0,s:b?XS.pctB:XS.pct}]);
   });
   const gotAll=arr.reduce((s,p)=>s+p.done,0), lackAll=arr.reduce((s,p)=>s+p.left,0), okAll=arr.filter(p=>p.left===0).length;
-  rows.push([{v:'รวมทุกประเภท',s:XS.totL},{v:PERSON_TARGET,s:XS.tot},{v:arr.length,s:XS.tot},{v:PERSON_TARGET*arr.length,s:XS.tot},
+  const PT=personTarget(o.y);
+  rows.push([{v:'รวมทุกประเภท',s:XS.totL},{v:PT,s:XS.tot},{v:arr.length,s:XS.tot},{v:PT*arr.length,s:XS.tot},
     {v:gotAll,s:XS.tot},{v:lackAll,s:XS.tot},{v:okAll,s:XS.tot},{v:arr.length-okAll,s:XS.tot},
     {v:arr.length?okAll/arr.length:0,s:XS.tot}]);
   rows.push(xrow(N,XS.def));
@@ -3617,8 +3618,8 @@ function exportAllCSV(y){
 }
 function exportPersonCSV(y){
   const {people}=computePerson(y);
-  const head=['id','name','vsm','PSIF (Con)','Near miss','PSIF (Behavior)','submitted','done','approved','rejected','missing','PSIF bonus% (เต็ม 10 จากโบนัสรวม 105)'];
-  const rows=people.map(p=>[p.id,p.name,p.vsm,p.cats.PSIF,p.cats['Near miss'],p.cats.Behavior,p.submitted,p.done,p.approved,p.rejected,p.missing,p.bonus].map(csvCell).join(','));
+  const head=['id','name','vsm','PSIF Cardinal Rules','Near Miss','พฤติกรรมตามกิจกรรมเสี่ยงสูง','submitted','done','approved','rejected','missing (ขาดรายประเภท)'];
+  const rows=people.map(p=>[p.id,p.name,p.vsm,p.cats.PSIF,p.cats['Near miss'],p.cats.Behavior,p.submitted,p.done,p.approved,p.rejected,p.missing].map(csvCell).join(','));
   dl(`PSIF_person_${y}.csv`,[head.join(','),...rows].join('\n')); toast('ส่งออกแล้ว','green');
 }
 
@@ -3638,11 +3639,21 @@ function closeModal(){ $('modalBg').classList.remove('open'); }
  *  DEFAULT (demo / first-run) DATA — mirrors schema.sql seed
  * ==================================================================== */
 const DEFAULT_AREAS=[
-  {id:'ca_line1',  name:'Clean Air - Line 1',     vsm:'Clean Air', active:1},
-  {id:'ca_line2',  name:'Clean Air - Line 2',     vsm:'Clean Air', active:1},
-  {id:'warehouse', name:'คลังสินค้า / Warehouse', vsm:'Logistics', active:1},
-  {id:'office',    name:'สำนักงาน / Office',      vsm:'Office',    active:1},
-  {id:'common',    name:'พื้นที่ส่วนกลาง',         vsm:'Common',    active:1},
+  {id:'production',  name:'Production',             vsm:'Production',  active:1},
+  {id:'warehouse',   name:'Warehouse / คลังสินค้า', vsm:'WHLOG',       active:1},
+  {id:'logistics',   name:'Logistics',              vsm:'WHLOG',       active:1},
+  {id:'tpt',         name:'TPT',                    vsm:'TPT',         active:1},
+  {id:'met',         name:'MET',                    vsm:'MET',         active:1},
+  {id:'maintenance', name:'Maintenance',            vsm:'Maintenance', active:1},
+  {id:'quality',     name:'Quality',                vsm:'Quality',     active:1},
+  {id:'ehs',         name:'EHS',                    vsm:'EHS',         active:1},
+  {id:'hr',          name:'HR / พื้นที่ส่วนกลาง',     vsm:'HR',          active:1},
+  {id:'accounting',  name:'Accounting',             vsm:'Accounting',  active:1},
+  {id:'sales',       name:'Sales',                  vsm:'Sales',       active:1},
+  {id:'purchasing',  name:'Purchasing',             vsm:'Purchasing',  active:1},
+  {id:'it',          name:'IT',                     vsm:'IT',          active:1},
+  {id:'office',      name:'สำนักงาน / Office',       vsm:'Office',      active:1},
+  {id:'common',      name:'พื้นที่ส่วนกลาง',          vsm:'Common',      active:1},
 ];
 /* เริ่มต้นมีแค่ผู้ดูแลระบบ 1 คน — รายชื่อพนักงานจริงเพิ่มที่ ตั้งค่า → พนักงาน (วางจาก Excel ทีเดียวหลายคนได้) */
 const DEFAULT_EMP=[

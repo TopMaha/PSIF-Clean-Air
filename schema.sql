@@ -34,10 +34,23 @@ CREATE TABLE IF NOT EXISTS categories (
   active    INTEGER DEFAULT 1
 );
 
--- ---------- master: annual target (stories / person / year) ----------
+-- ---------- master: annual target ----------
+-- TENNECO Clean Air ตั้งเป้า "แยกรายประเภท" (ส่งเกินประเภทหนึ่งไม่ชดเชยอีกประเภท)
+--   t_psif       = PSIF Cardinal Rules            2 เรื่อง/คน/ปี
+--   t_near_miss  = Near Miss                      2 เรื่อง/คน/ปี
+--   t_behavior   = พฤติกรรมตามกิจกรรมเสี่ยงสูง      1 เรื่อง/คน/ปี
+--   per_person_target = ผลรวมทั้ง 3 ช่อง (5 เรื่อง/คน/ปี) — เก็บไว้ให้อ่านง่าย
+--   plant_target = Target Plant ทั้งโรงงาน 425 เรื่อง/ปี (= 5 × 85 คน) ตั้งเป็นตัวเลขคงที่
+--                  เพราะเป็นเป้าที่ตกลงกันไว้ ไม่ให้ขยับตามหัวคนที่เปลี่ยนระหว่างปี
+-- 🚫 ชุดนี้ไม่มีการคิดโบนัสจาก PSIF (ต่างจากระบบ PSIF ของโรงงานเดิม)
+-- (DB ที่สร้างไว้ก่อน v2.8: รัน migrate-2026-09-08-cleanair-targets.sql)
 CREATE TABLE IF NOT EXISTS targets (
   year              INTEGER PRIMARY KEY,
-  per_person_target INTEGER NOT NULL DEFAULT 6
+  per_person_target INTEGER NOT NULL DEFAULT 5,
+  t_psif            INTEGER NOT NULL DEFAULT 2,
+  t_near_miss       INTEGER NOT NULL DEFAULT 2,
+  t_behavior        INTEGER NOT NULL DEFAULT 1,
+  plant_target      INTEGER NOT NULL DEFAULT 425
 );
 
 -- ---------- admin issuance: opens the "in-progress" step per VSM/year ----------
@@ -124,10 +137,10 @@ CREATE INDEX IF NOT EXISTS idx_notif_emp_id ON notifications(employee_id, id DES
 --  SEED DATA
 -- ============================================================
 
--- default target for the current year
-INSERT OR IGNORE INTO targets (year, per_person_target) VALUES (2025, 6);
-INSERT OR IGNORE INTO targets (year, per_person_target) VALUES (2026, 6);
-INSERT OR IGNORE INTO targets (year, per_person_target) VALUES (2027, 6);
+-- เป้าหมายของ Clean Air: 2 + 2 + 1 = 5 เรื่อง/คน/ปี · Target Plant 425 เรื่อง/ปี
+INSERT OR IGNORE INTO targets (year, per_person_target, t_psif, t_near_miss, t_behavior, plant_target) VALUES (2025, 5, 2, 2, 1, 425);
+INSERT OR IGNORE INTO targets (year, per_person_target, t_psif, t_near_miss, t_behavior, plant_target) VALUES (2026, 5, 2, 2, 1, 425);
+INSERT OR IGNORE INTO targets (year, per_person_target, t_psif, t_near_miss, t_behavior, plant_target) VALUES (2027, 5, 2, 2, 1, 425);
 
 -- PSIF categories — fixed at exactly 3 types (PSIF / Near miss / Behavior)
 INSERT OR IGNORE INTO categories (id, name) VALUES
@@ -135,13 +148,24 @@ INSERT OR IGNORE INTO categories (id, name) VALUES
   ('near_miss', 'Near miss'),
   ('behavior',  'Behavior');
 
--- areas / machines (ตัวอย่างไว้ให้เริ่มใช้งานได้ — เพิ่ม/แก้/ปิดได้ที่ ตั้งค่า → พื้นที่/เครื่องจักร)
+-- areas / พื้นที่รับผิดชอบ — ตั้งตามหน่วยงานเจ้าของพื้นที่ที่ใช้จริงในไฟล์ Databases PSIF 2026
+-- (เพิ่ม/แก้/ปิดได้ที่ ตั้งค่า → พื้นที่/เครื่องจักร)
 INSERT OR IGNORE INTO areas (id, name, vsm) VALUES
-  ('ca_line1',  'Clean Air - Line 1',     'Clean Air'),
-  ('ca_line2',  'Clean Air - Line 2',     'Clean Air'),
-  ('warehouse', 'คลังสินค้า / Warehouse', 'Logistics'),
-  ('office',    'สำนักงาน / Office',      'Office'),
-  ('common',    'พื้นที่ส่วนกลาง',         'Common');
+  ('production',  'Production',              'Production'),
+  ('warehouse',   'Warehouse / คลังสินค้า',  'WHLOG'),
+  ('logistics',   'Logistics',               'WHLOG'),
+  ('tpt',         'TPT',                     'TPT'),
+  ('met',         'MET',                     'MET'),
+  ('maintenance', 'Maintenance',             'Maintenance'),
+  ('quality',     'Quality',                 'Quality'),
+  ('ehs',         'EHS',                     'EHS'),
+  ('hr',          'HR / พื้นที่ส่วนกลาง',      'HR'),
+  ('accounting',  'Accounting',              'Accounting'),
+  ('sales',       'Sales',                   'Sales'),
+  ('purchasing',  'Purchasing',              'Purchasing'),
+  ('it',          'IT',                      'IT'),
+  ('office',      'สำนักงาน / Office',        'Office'),
+  ('common',      'พื้นที่ส่วนกลาง',           'Common');
 
 -- employees — ระบบใหม่ยังไม่มีรายชื่อจริง เริ่มด้วยผู้ดูแลระบบ 1 คนไว้ล็อกอินครั้งแรก
 --   ล็อกอินด้วยรหัส  ADMIN  → เมนู "ตั้งค่า" (รหัสผ่านเมนูตั้งค่าเริ่มต้น: admin1234)
