@@ -104,6 +104,7 @@ label.fl{display:block;font-size:13px;font-weight:600;color:var(--muted);margin:
 label.fl .req{color:var(--red)}
 .inp,select.inp,textarea.inp{width:100%;padding:11px 12px;border:1.5px solid var(--border);border-radius:var(--r-sm);background:#fff;color:var(--text);transition:border .15s,box-shadow .15s}
 .inp:focus,select.inp:focus,textarea.inp:focus{outline:none;border-color:var(--blue);box-shadow:var(--ring)}
+.inp:disabled,select.inp:disabled{background:var(--bg);color:var(--muted);cursor:not-allowed}
 textarea.inp{resize:vertical;min-height:74px}
 
 /* ---------- buttons ---------- */
@@ -679,7 +680,7 @@ const LS = {
   set(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(_){ } },
 };
 
-const APP_VERSION='2.8';   // เลขเวอร์ชันแอป — แสดงที่หน้า login + แถบบนสุด (อัปเดตทีละ 0.1 เมื่อออกรุ่นใหม่)
+const APP_VERSION='2.9';   // เลขเวอร์ชันแอป — แสดงที่หน้า login + แถบบนสุด (อัปเดตทีละ 0.1 เมื่อออกรุ่นใหม่)
 let ADMIN_PASSWORD = LS.get('psifca_admin_pw','admin1234'); // changeable in code/settings
 const DEFAULT_API = 'https://psif-cleanair-api.wiphawas-sketchup.workers.dev'; // shared online DB (D1) + photos (R2)
 let API = LS.get('psifca_api', DEFAULT_API);
@@ -790,7 +791,7 @@ const online = () => !!API;
  * ==================================================================== */
 const DEMO_KEY='psifca_demo';
 function demoLoad(){ const d=LS.get(DEMO_KEY,null); if(d){ Object.assign(state,d); state.notifications=state.notifications||[]; }
-  else { Object.assign(state,{employees:DEFAULT_EMP,areas:DEFAULT_AREAS,categories:FIXED_CATS,targets:[{year:yr(),per_person_target:5,t_psif:2,t_near_miss:2,t_behavior:1,plant_target:425}],issuances:[],items:[],notifications:[]}); demoSave(); }
+  else { Object.assign(state,{employees:DEFAULT_EMP,areas:DEFAULT_AREAS,categories:FIXED_CATS,targets:[{year:yr(),per_person_target:5,t_psif:2,t_near_miss:2,t_behavior:1,plant_target:425,p_psif:170,p_near_miss:170,p_behavior:85}],issuances:[],items:[],notifications:[]}); demoSave(); }
   state.categories=FIXED_CATS; }
 function demoSave(){ if(!online()) LS.set(DEMO_KEY,{employees:state.employees,areas:state.areas,categories:state.categories,targets:state.targets,issuances:state.issuances,items:state.items,notifications:state.notifications}); }
 
@@ -928,7 +929,8 @@ async function bulkEmployees(mode,rows,onProgress){
   return {done,failed,moved,errors};
 }
 async function setTarget(t){
-  if(online()) await api('/targets',{body:t});
+  // v2.9: ส่งรหัสเปิดแก้ไขไปกับคำขอด้วย — backend ตรวจซ้ำอีกชั้น (ไม่เก็บรหัสลง state/localStorage)
+  if(online()) await api('/targets',{body:{...t,code:TARGET_EDIT_CODE}});
   const i=state.targets.findIndex(x=>x.year==t.year);
   if(i>=0) state.targets[i]={...state.targets[i],...t}; else state.targets.push({...t});
   demoSave();
@@ -2083,15 +2085,22 @@ function renderSafety(){
  *  PERSON SUMMARY (ใช้คำนวณโบนัส + ส่งออก CSV — req #2: ไม่มีหน้ารายงานแล้ว)
  * ==================================================================== */
 /* ---------------- เป้าหมายของ TENNECO Clean Air ----------------
-   เป้ารายคน/ปี ตั้ง "แยกรายประเภท" (ส่งเกินประเภทหนึ่งไม่ชดเชยอีกประเภท):
-     PSIF Cardinal Rules 2 · Near Miss 2 · พฤติกรรมตามกิจกรรมเสี่ยงสูง 1  → รวม 5 เรื่อง/คน/ปี
-   Target Plant = 425 เรื่อง/ปี (= 5 × 85 คน) — ตัวเลขที่ตกลงกันไว้ ไม่ผูกกับหัวคนที่เปลี่ยนระหว่างปี
-   ค่าทั้งหมดเก็บรายปีในตาราง targets (t_psif · t_near_miss · t_behavior · plant_target)
-   แก้ได้ที่ ⚙️ ตั้งค่า → เป้าหมาย · ถ้าปีนั้นยังไม่มีแถว จะใช้ค่ามาตรฐานด้านล่าง
+   ① เป้ารายคน/ปี ตั้ง "แยกรายประเภท" (ส่งเกินประเภทหนึ่งไม่ชดเชยอีกประเภท):
+        PSIF Cardinal Rules 2 · Near Miss 2 · พฤติกรรมตามกิจกรรมเสี่ยงสูง 1  → รวม 5 เรื่อง/คน/ปี
+   ② Target Plant (ทั้งโรงงาน/ปี) v2.9: ตั้งแยกรายประเภทได้เช่นกัน — "แต่ละประเภทต้องการกี่เรื่อง"
+        PSIF 170 · Near Miss 170 · พฤติกรรม 85 → รวม 425 เรื่อง/ปี (= 5 × 85 คน)
+        เป็นตัวเลขที่ตกลงกันไว้ ไม่ผูกกับหัวคนที่เปลี่ยนระหว่างปี
+   ค่าทั้งหมดเก็บรายปีในตาราง targets
+     รายคน → t_psif · t_near_miss · t_behavior     ·  ทั้งโรงงาน → p_psif · p_near_miss · p_behavior
+     plant_target = ผลรวมของ p_* (เก็บไว้ให้อ่านง่าย/ข้อมูลเก่าที่ยังไม่ได้ migrate)
+   แก้ได้ที่ ⚙️ ตั้งค่า → เป้าหมาย (Super Admin + ต้องกรอกรหัสเปิดแก้ไข)
+   ถ้าปีนั้นยังไม่มีแถว จะใช้ค่ามาตรฐานด้านล่าง
    CAT_KEYS = ค่าที่เก็บใน DB, เรียงตามลำดับที่ต้องการแสดง (req #4) */
 const CAT_KEYS=['PSIF','Near miss','Behavior'];
 const CAT_TARGET_FALLBACK={'PSIF':2,'Near miss':2,'Behavior':1};
 const CAT_TARGET_COL={'PSIF':'t_psif','Near miss':'t_near_miss','Behavior':'t_behavior'};
+const PLANT_CAT_FALLBACK={'PSIF':170,'Near miss':170,'Behavior':85};
+const PLANT_CAT_COL={'PSIF':'p_psif','Near miss':'p_near_miss','Behavior':'p_behavior'};
 const PLANT_TARGET_FALLBACK=425;
 /* แถวเป้าหมายของปีนั้น — ไม่มีก็ถอยไปใช้ของปีปัจจุบัน แล้วค่อยใช้ค่ามาตรฐาน */
 function targetRow(y){ return state.targets.find(x=>x.year==y) || state.targets.find(x=>x.year==yr()) || null; }
@@ -2100,8 +2109,17 @@ function catTarget(k,y){
   return (v==null||v==='')? (CAT_TARGET_FALLBACK[k]||0) : (+v||0);
 }
 function personTarget(y){ return CAT_KEYS.reduce((s,k)=>s+catTarget(k,y),0); }
-function plantTargetFor(y){ const t=targetRow(y), v=t?t.plant_target:null;
-  return (v==null||v===''||!+v)? PLANT_TARGET_FALLBACK : +v; }
+/* Target Plant รายประเภท — DB เก่าที่ยังไม่มีคอลัมน์ p_* : เกลี่ย plant_target เดิมตามสัดส่วนเป้ารายคน
+   (เพื่อให้หน้าจอยังอ่านค่าถูกก่อนรัน migrate-2026-09-17-plant-cat-targets.sql) */
+function plantCatTarget(k,y){
+  const t=targetRow(y==null?yr():y), v=t?t[PLANT_CAT_COL[k]]:null;
+  if(v!=null&&v!=='') return +v||0;
+  const per=personTarget(y), old=t?+t.plant_target:0;
+  if(old>0&&per>0) return Math.round(old*catTarget(k,y)/per);
+  return PLANT_CAT_FALLBACK[k]||0;
+}
+function plantTargetFor(y){ const s=CAT_KEYS.reduce((n,k)=>n+plantCatTarget(k,y),0);
+  return s>0? s : PLANT_TARGET_FALLBACK; }
 /* ยังขาดอีกกี่เรื่องจึงครบทุกประเภท (ตรรกะกลางที่ทุกหน้าจอ/รายงานใช้ร่วมกัน) */
 function leftOf(cats,y){ return CAT_KEYS.reduce((s,k)=>s+Math.max(0,catTarget(k,y)-((cats||{})[k]||0)),0); }
 function targetFor(y){ return personTarget(y); }
@@ -2285,7 +2303,9 @@ function renderDash(){
   const hero=`<div class="card dash-hero">
     <div class="dh-title">🏭 ${isDeptAdmin()?esc(myVsm()||'แผนกของฉัน'):'TENNECO Clean Air'} · ปี ${y}</div>
     <div class="dh-tiles">
-      <div class="dh-tile target"><div class="dh-l">Target Plant</div><div class="dh-n">${plantTarget.toLocaleString()}</div><div class="dh-s">${target} เรื่อง/คน/ปี × ${empCount.toLocaleString()} คน = ${calcTarget.toLocaleString()}</div></div>
+      <div class="dh-tile target"><div class="dh-l">Target Plant</div><div class="dh-n">${plantTarget.toLocaleString()}</div>
+        <div class="dh-s">${isDeptAdmin()?`${target} เรื่อง/คน/ปี × ${empCount.toLocaleString()} คน`
+          :CAT_KEYS.map(k=>esc(catLabel(k))+' '+plantCatTarget(k,y).toLocaleString()).join(' · ')}</div></div>
       <div class="dh-tile subm" onclick="openSubmitInfo()" title="แตะดูคำอธิบาย"><div class="dh-l">ส่งแล้ว · ผ่าน Safety ℹ️</div>
         <div class="dh-n">${subMain.toLocaleString()}${subSide?`<span class="side">+${subSide.toLocaleString()}</span>`:''}</div>
         <div class="dh-s">${pctSub}% ของเป้าหมาย</div>
@@ -2297,8 +2317,11 @@ function renderDash(){
   </div>`;
 
   const monthCard=`<div class="card"><h3>📅 ส่งรายเดือน — ปี ${y}</h3>${monthChart(months,plantTarget/12)}</div>`;
-  const catCard=dashTargetTable('🏷️ ประเภทของจุดเสี่ยงหรืออันตราย (PSIF) — นับเฉพาะอนุมัติ+จบงาน','ประเภท',
-    CAT_KEYS.map(k=>({label:catLabel(k),target:catTarget(k,y)*empCount,actual:catSub[k]})));
+  // v2.9: ทั้งโรงงาน → เทียบ “Target Plant รายประเภท” ที่ตั้งไว้ในหน้าตั้งค่า (ไม่ผูกกับหัวคนที่เปลี่ยนระหว่างปี)
+  //        Admin แผนก → แผนกไม่มี Target Plant ของตัวเอง จึงคิดจากเป้ารายคน × หัวคนในแผนก
+  const catTgtOf=k=>isDeptAdmin()? catTarget(k,y)*empCount : plantCatTarget(k,y);
+  const catCard=dashTargetTable(`🏷️ ประเภทของจุดเสี่ยงหรืออันตราย (PSIF) — เทียบ${isDeptAdmin()?'เป้าของแผนก':' Target Plant'} · นับเฉพาะอนุมัติ+จบงาน`,'ประเภท',
+    CAT_KEYS.map(k=>({label:catLabel(k),target:catTgtOf(k),actual:catSub[k]})));
   const statusCard=`<div class="card"><h3>📊 สถานะงาน</h3>${statusDonut([
       {label:'รอ Safety',   val:c.recorded,   color:'var(--blue)'},
       {label:'ส่งกลับให้แก้ไข', val:c.returned,  color:'var(--rose)'},
@@ -2631,27 +2654,7 @@ function renderSettings(){
       </div>
       <div class="sub" style="margin-top:8px">เปิดแล้ว: ${state.issuances.filter(i=>i.year==y).map(i=>esc(i.vsm)).join(', ')||'—'}</div>
     </div>
-    <div class="card"><h3>🎯 เป้าหมาย — TENNECO Clean Air</h3>
-      <div class="note" style="margin-bottom:8px">เป้ารายคน/ปี ตั้ง<b>แยกรายประเภท</b> — ส่งเกินประเภทหนึ่ง<b>ไม่ชดเชย</b>อีกประเภท<br>
-        ค่ามาตรฐาน: <b>PSIF Cardinal Rules 2</b> · <b>Near Miss 2</b> · <b>พฤติกรรมตามกิจกรรมเสี่ยงสูง 1</b> (รวม 5 เรื่อง/คน/ปี)<br>
-        <b>Target Plant</b> = เป้าทั้งโรงงานต่อปี — Clean Air = <b>425</b> เรื่อง (5 × 85 คน)<br>
-        ⚖️ นับเฉพาะเรื่องที่ Safety อนุมัติ + จบงาน · 🚫 ระบบนี้<b>ไม่คิดโบนัส</b>จาก PSIF</div>
-      <div class="row" style="gap:8px;align-items:center;margin-bottom:8px">
-        <span class="sub">ปี</span>
-        <select class="inp" id="tgtYear" style="width:auto" onchange="fillTargetInputs()">${[y-1,y,y+1].map(yy=>`<option ${yy===y?'selected':''}>${yy}</option>`).join('')}</select>
-      </div>
-      <div class="grid g3">
-        <div><div class="sub">PSIF Cardinal Rules</div><input class="inp" id="tgtCR" type="number" min="0" value="${catTarget('PSIF',y)}"></div>
-        <div><div class="sub">Near Miss</div><input class="inp" id="tgtNM" type="number" min="0" value="${catTarget('Near miss',y)}"></div>
-        <div><div class="sub">พฤติกรรมตามกิจกรรมเสี่ยงสูง</div><input class="inp" id="tgtBH" type="number" min="0" value="${catTarget('Behavior',y)}"></div>
-      </div>
-      <div class="row" style="gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">
-        <span class="sub">Target Plant (เรื่อง/ปี)</span>
-        <input class="inp" id="tgtPlant" type="number" min="0" value="${plantTargetFor(y)}" style="width:110px">
-        <button class="btn btn-line btn-sm" onclick="calcPlantTarget()">🧮 คำนวณจากจำนวนคน</button>
-        <button class="btn btn-blue btn-sm" onclick="saveTarget()">บันทึก</button>
-      </div>
-    </div>
+    ${targetCardHtml(y)}
     <div class="card"><h3>👥 พนักงาน (${state.employees.filter(e=>!isBucketId(e.id)&&e.active!==0).length} คน)</h3>
       <button class="btn btn-blue btn-sm" onclick="editEmp()">➕ เพิ่ม/แก้ไข</button>
       <input class="inp" id="empSearch" placeholder="🔍 ค้นหาชื่อ หรือ รหัสพนักงาน (เช่น L-1827)" value="${esc(empSearch)}" oninput="empSearch=this.value;debounce('emp',updateEmpRows)" style="margin:8px 0">
@@ -2675,24 +2678,90 @@ function renderSettings(){
   restoreEmpBulkBox();
 }
 async function doIssue(){ const v=$('issVsm').value; await addIssuance(v,yr()); toast('เปิดดำเนินการ '+v,'green'); renderSettings(); }
+
+/* ====================================================================
+ *  การ์ด “เป้าหมาย” ในหน้าตั้งค่า (2026-09-17 · v2.9)
+ *  ① เป้ารายคน/ปี แยกรายประเภท   ② Target Plant ทั้งโรงงาน/ปี แยกรายประเภท
+ *  🔐 แก้ไขได้เฉพาะ Super Admin และต้องกรอก “รหัสเปิดแก้ไข” ก่อน — กันแก้พลาด
+ *     เพราะตัวเลขชุดนี้กระทบทุกแดชบอร์ด/รายงานของทั้งโรงงาน (backend ตรวจรหัสซ้ำอีกชั้น)
+ * ==================================================================== */
+const TARGET_EDIT_CODE='TENNECO_CA';
+let tgtUnlocked=false;      // ปลดล็อกเฉพาะรอบการใช้งานนี้ — รีเฟรช/ออกจากระบบแล้วต้องกรอกใหม่
+const TGT_IN ={'PSIF':'tgtCR','Near miss':'tgtNM','Behavior':'tgtBH'};      // ช่องเป้ารายคน
+const TGT_PIN={'PSIF':'tgtPCR','Near miss':'tgtPNM','Behavior':'tgtPBH'};   // ช่อง Target Plant
+function unlockTargetEdit(){
+  const c=prompt('🔐 แก้ไขเป้าหมาย / Target Plant — กรอกรหัสเปิดแก้ไข:');
+  if(c==null) return;
+  if(c.trim().toUpperCase()!==TARGET_EDIT_CODE){ toast('รหัสเปิดแก้ไขไม่ถูกต้อง','red'); return; }
+  tgtUnlocked=true; toast('ปลดล็อกแก้ไขเป้าหมายแล้ว','green'); renderSettings();
+}
+function lockTargetEdit(){ tgtUnlocked=false; toast('ล็อกการแก้ไขเป้าหมายแล้ว'); renderSettings(); }
+function targetCardHtml(y){
+  const lk=!tgtUnlocked, dis=lk?' disabled':'';
+  const heads=state.employees.filter(e=>!isBucketId(e.id)&&e.active!==0).length;
+  const cell=(id,lbl,val)=>`<div><div class="sub">${lbl}</div>
+        <input class="inp" id="${id}" type="number" min="0" value="${val}" oninput="sumPlantTarget()"${dis}></div>`;
+  return `<div class="card"><h3>🎯 เป้าหมาย — TENNECO Clean Air
+        ${lk?'<span class="badge b-gray">🔒 ล็อกอยู่</span>':'<span class="badge b-green">🔓 แก้ไขได้</span>'}</h3>
+      <div class="note" style="margin-bottom:8px"><b>① เป้ารายคน/ปี</b> ตั้ง<b>แยกรายประเภท</b> — ส่งเกินประเภทหนึ่ง<b>ไม่ชดเชย</b>อีกประเภท<br>
+        ค่ามาตรฐาน: <b>PSIF Cardinal Rules 2</b> · <b>Near Miss 2</b> · <b>พฤติกรรมตามกิจกรรมเสี่ยงสูง 1</b> (รวม 5 เรื่อง/คน/ปี)<br>
+        <b>② Target Plant</b> = เป้า<b>ทั้งโรงงาน</b>ต่อปี ตั้งได้ว่า<b>แต่ละประเภทต้องการกี่เรื่อง</b> —
+        Clean Air = <b>170 · 170 · 85</b> (รวม <b>425</b> เรื่อง/ปี = 5 × 85 คน)<br>
+        ⚖️ นับเฉพาะเรื่องที่ Safety อนุมัติ + จบงาน · 🚫 ระบบนี้<b>ไม่คิดโบนัส</b>จาก PSIF</div>
+      ${lk?'<div class="warn">🔐 ตัวเลขเป้าหมายถูกล็อกไว้ — ต้องกรอก<b>รหัสเปิดแก้ไข</b>ก่อนจึงจะแก้ได้ (ขอรหัสจากผู้ดูแลระบบ)</div>':''}
+      <div class="row" style="gap:8px;align-items:center;margin:8px 0;flex-wrap:wrap">
+        <span class="sub">ปี</span>
+        <select class="inp" id="tgtYear" style="width:auto" onchange="fillTargetInputs()">${[y-1,y,y+1].map(yy=>`<option ${yy===y?'selected':''}>${yy}</option>`).join('')}</select>
+        ${lk?'<button class="btn btn-orange btn-sm" onclick="unlockTargetEdit()">🔐 กรอกรหัสเพื่อแก้ไข</button>'
+            :'<button class="btn btn-line btn-sm" onclick="lockTargetEdit()">🔒 ล็อกอีกครั้ง</button>'}
+      </div>
+      <div class="sub" style="font-weight:800;margin:10px 0 6px">① เป้ารายคน — เรื่อง/คน/ปี</div>
+      <div class="grid g3">
+        ${cell('tgtCR','PSIF Cardinal Rules',catTarget('PSIF',y))}
+        ${cell('tgtNM','Near Miss',catTarget('Near miss',y))}
+        ${cell('tgtBH','พฤติกรรมตามกิจกรรมเสี่ยงสูง',catTarget('Behavior',y))}
+      </div>
+      <div class="sub" style="font-weight:800;margin:14px 0 6px">② Target Plant — ทั้งโรงงาน/ปี · แต่ละประเภทต้องการกี่เรื่อง</div>
+      <div class="grid g3">
+        ${cell('tgtPCR','PSIF Cardinal Rules',plantCatTarget('PSIF',y))}
+        ${cell('tgtPNM','Near Miss',plantCatTarget('Near miss',y))}
+        ${cell('tgtPBH','พฤติกรรมตามกิจกรรมเสี่ยงสูง',plantCatTarget('Behavior',y))}
+      </div>
+      <div class="row" style="gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">
+        <span class="sub">รวม Target Plant <b id="tgtPlantSum" style="font-size:15px;color:var(--blue)">${plantTargetFor(y).toLocaleString()}</b> เรื่อง/ปี</span>
+        <button class="btn btn-line btn-sm" onclick="calcPlantTarget()"${dis}>🧮 คำนวณจากจำนวนคน (${heads})</button>
+        <button class="btn btn-blue btn-sm" onclick="saveTarget()"${dis}>บันทึก</button>
+      </div>
+    </div>`;
+}
 /* เปลี่ยนปีในช่องเลือก → ดึงค่าเป้าของปีนั้นมาแสดง (ไม่ต้องวาดหน้าตั้งค่าใหม่ทั้งหน้า) */
 function fillTargetInputs(){
   const ty=+$('tgtYear').value||yr();
-  $('tgtCR').value=catTarget('PSIF',ty); $('tgtNM').value=catTarget('Near miss',ty);
-  $('tgtBH').value=catTarget('Behavior',ty); $('tgtPlant').value=plantTargetFor(ty);
+  CAT_KEYS.forEach(k=>{ $(TGT_IN[k]).value=catTarget(k,ty); $(TGT_PIN[k]).value=plantCatTarget(k,ty); });
+  sumPlantTarget();
 }
-/* ปุ่มช่วยคิด Target Plant = (เป้ารวม/คน) × จำนวนพนักงานที่ยังทำงานอยู่ (ไม่นับช่องว่างพนักงานลาออก) */
+/* ยอดรวม Target Plant = ผลบวกของ 3 ประเภท (ไม่มีช่องให้กรอกยอดรวมเอง — กันตัวเลขขัดกันเอง) */
+function sumPlantTarget(){
+  const s=CAT_KEYS.reduce((n,k)=>n+(+$(TGT_PIN[k]).value||0),0);
+  const el=$('tgtPlantSum'); if(el) el.textContent=s.toLocaleString();
+  return s;
+}
+/* ปุ่มช่วยคิด Target Plant รายประเภท = เป้ารายคนของประเภทนั้น × จำนวนพนักงานที่ยังทำงานอยู่
+   (ไม่นับ “ช่องว่าง” ข้อมูลพนักงานลาออก) — พิมพ์ทับเองได้ถ้าตกลงตัวเลขอื่นไว้ */
 function calcPlantTarget(){
+  if(!tgtUnlocked){ toast('กรอกรหัสเปิดแก้ไขก่อน','red'); return; }
   const heads=state.employees.filter(e=>!isBucketId(e.id)&&e.active!==0).length;
-  const per=(+$('tgtCR').value||0)+(+$('tgtNM').value||0)+(+$('tgtBH').value||0);
-  $('tgtPlant').value=per*heads;
-  toast(`${per} เรื่อง/คน/ปี × ${heads} คน = ${per*heads} เรื่อง`,'green');
+  CAT_KEYS.forEach(k=>{ $(TGT_PIN[k]).value=(+$(TGT_IN[k]).value||0)*heads; });
+  const per=CAT_KEYS.reduce((n,k)=>n+(+$(TGT_IN[k]).value||0),0);
+  toast(`${per} เรื่อง/คน/ปี × ${heads} คน = ${sumPlantTarget()} เรื่อง`,'green');
 }
 async function saveTarget(){
+  if(!tgtUnlocked){ toast('กรอกรหัสเปิดแก้ไขก่อนบันทึก','red'); return; }
   const ty=+$('tgtYear').value||yr();
-  const t={year:ty, t_psif:+$('tgtCR').value||0, t_near_miss:+$('tgtNM').value||0,
-           t_behavior:+$('tgtBH').value||0, plant_target:+$('tgtPlant').value||0};
+  const t={year:ty, t_psif:+$('tgtCR').value||0, t_near_miss:+$('tgtNM').value||0, t_behavior:+$('tgtBH').value||0,
+           p_psif:+$('tgtPCR').value||0, p_near_miss:+$('tgtPNM').value||0, p_behavior:+$('tgtPBH').value||0};
   t.per_person_target=t.t_psif+t.t_near_miss+t.t_behavior;
+  t.plant_target=t.p_psif+t.p_near_miss+t.p_behavior;   // ยอดรวมคำนวณจาก 3 ประเภทเสมอ
   await setTarget(t); toast('บันทึกเป้าหมายแล้ว','green'); refreshAll();
 }
 function restoreEmpBulkBox(){ const b=$('empBulkBox'); if(b) b.value=empBulkText; }   // renderSettings สร้าง textarea ใหม่ — เอาข้อความที่วางไว้กลับมา

@@ -52,6 +52,20 @@ async function requireSuperAdmin(env, request, body) {
   return null;
 }
 
+/* v2.9 — รหัสเปิดแก้ไข "เป้าหมาย/Target Plant"
+ * ชั้นที่สองถัดจาก role: Super Admin ต้องกรอกรหัสนี้ที่หน้าตั้งค่าก่อน จึงแก้ตัวเลขเป้าได้
+ * กันแก้พลาดโดยไม่ตั้งใจ (ตัวเลขนี้กระทบทุกแดชบอร์ด/รายงานของทั้งโรงงาน)
+ * ตั้งค่าอื่นเป็น secret ได้ที่ wrangler: TARGET_EDIT_CODE (ไม่ตั้ง = ใช้ TENNECO_CA) */
+const TARGET_EDIT_CODE = 'TENNECO_CA';
+function requireTargetCode(env, body) {
+  const want = String((env && env.TARGET_EDIT_CODE) || TARGET_EDIT_CODE).trim();
+  const got  = String((body && (body.code || body.edit_code)) || '').trim();
+  if (got.toUpperCase() !== want.toUpperCase()) {
+    return err('รหัสเปิดแก้ไขเป้าหมายไม่ถูกต้อง — กรอกรหัสที่ ตั้งค่า → เป้าหมาย ก่อนบันทึก', 403);
+  }
+  return null;
+}
+
 /* ข้อ 2: ประเภทที่บังคับแนบรูป = PSIF (Con) เท่านั้น (ค่าใน DB คือ 'PSIF') */
 const catIsCon = v => {
   v = String(v || '').trim().toLowerCase();
@@ -109,7 +123,7 @@ export default {
 
       switch (head) {
         case '':
-        case 'health':    return ok({ service: 'psif-cleanair', version: '2.8', time: nowISO() });
+        case 'health':    return ok({ service: 'psif-cleanair', version: '2.9', time: nowISO() });
         case 'bootstrap': return await bootstrap(env);
         case 'psif':      return await psifRoute(env, request, seg);
         case 'employees':
@@ -815,21 +829,29 @@ async function targetsRoute(env, request) {
     const b = await request.json();
     const deny = await requireSuperAdmin(env, request, b);   // ข้อ 3/6: ตั้งเป้าหมาย = Super Admin เท่านั้น
     if (deny) return deny;
+    const bad = requireTargetCode(env, b);                   // v2.9: + ต้องกรอกรหัสเปิดแก้ไข (TENNECO_CA)
+    if (bad) return bad;
     const year = +b.year || new Date().getFullYear();
-    // TENNECO Clean Air: เป้าตั้งแยกรายประเภท (2/2/1) + Target Plant ของทั้งโรงงาน (425)
+    // TENNECO Clean Air: เป้าตั้งแยกรายประเภท (2/2/1)
     const cr  = num(b.t_psif,       CA_TARGET.t_psif);
     const nm  = num(b.t_near_miss,  CA_TARGET.t_near_miss);
     const bh  = num(b.t_behavior,   CA_TARGET.t_behavior);
     const per = num(b.per_person_target, cr + nm + bh) || (cr + nm + bh);
-    const plant = num(b.plant_target, CA_TARGET.plant_target);
+    // v2.9: Target Plant ก็ตั้งแยกรายประเภทเช่นกัน (170/170/85) — plant_target = ผลรวม
+    const pcr = num(b.p_psif,      CA_TARGET.p_psif);
+    const pnm = num(b.p_near_miss, CA_TARGET.p_near_miss);
+    const pbh = num(b.p_behavior,  CA_TARGET.p_behavior);
+    const plant = pcr + pnm + pbh;
     await env.DB.prepare(
-      `INSERT INTO targets (year,per_person_target,t_psif,t_near_miss,t_behavior,plant_target)
-       VALUES (?,?,?,?,?,?)
+      `INSERT INTO targets (year,per_person_target,t_psif,t_near_miss,t_behavior,plant_target,p_psif,p_near_miss,p_behavior)
+       VALUES (?,?,?,?,?,?,?,?,?)
        ON CONFLICT(year) DO UPDATE SET per_person_target=excluded.per_person_target,
          t_psif=excluded.t_psif, t_near_miss=excluded.t_near_miss,
-         t_behavior=excluded.t_behavior, plant_target=excluded.plant_target`
-    ).bind(year, per, cr, nm, bh, plant).run();
-    return ok({ year, per_person_target: per, t_psif: cr, t_near_miss: nm, t_behavior: bh, plant_target: plant });
+         t_behavior=excluded.t_behavior, plant_target=excluded.plant_target,
+         p_psif=excluded.p_psif, p_near_miss=excluded.p_near_miss, p_behavior=excluded.p_behavior`
+    ).bind(year, per, cr, nm, bh, plant, pcr, pnm, pbh).run();
+    return ok({ year, per_person_target: per, t_psif: cr, t_near_miss: nm, t_behavior: bh,
+                plant_target: plant, p_psif: pcr, p_near_miss: pnm, p_behavior: pbh });
   }
   return err('method not allowed', 405);
 }
@@ -927,7 +949,14 @@ async function reportRoute(env, url, seg) {
       'Behavior':  num(trow && trow.t_behavior,  CA_TARGET.t_behavior),
     };
     const target = catTgt['PSIF'] + catTgt['Near miss'] + catTgt['Behavior'];
-    const plant_target = num(trow && trow.plant_target, CA_TARGET.plant_target);
+    // v2.9: Target Plant รายประเภท — DB ที่ยังไม่ migrate (ไม่มีคอลัมน์ p_*) เกลี่ย plant_target เดิม
+    //       ตามสัดส่วนเป้ารายคน ให้ตัวเลขตรงกับที่หน้าเว็บแสดง (ดู plantCatTarget ใน index.html)
+    const plantTgt = (trow && trow.p_psif != null) ? {
+      'PSIF':      num(trow.p_psif,      CA_TARGET.p_psif),
+      'Near miss': num(trow.p_near_miss, CA_TARGET.p_near_miss),
+      'Behavior':  num(trow.p_behavior,  CA_TARGET.p_behavior),
+    } : spreadPlantTarget(num(trow && trow.plant_target, CA_TARGET.plant_target), catTgt, target);
+    const plant_target = plantTgt['PSIF'] + plantTgt['Near miss'] + plantTgt['Behavior'];
     const newCats = () => ({ 'PSIF': 0, 'Near miss': 0, 'Behavior': 0 });
     const map = {};
     for (const e of emp) map[e.id] = {
@@ -951,7 +980,7 @@ async function reportRoute(env, url, seg) {
       m.missing = m.left;
       return m;
     }).sort((a, b) => b.done - a.done);
-    return ok({ year, target, cat_target: catTgt, plant_target, people });
+    return ok({ year, target, cat_target: catTgt, plant_target, plant_cat_target: plantTgt, people });
   }
 
   if (kind === 'overview') {
@@ -976,9 +1005,17 @@ async function reportRoute(env, url, seg) {
 }
 
 /* ค่ามาตรฐานเป้าหมายของ TENNECO Clean Air — ใช้เมื่อปีนั้นยังไม่มีแถวในตาราง targets
- *   PSIF Cardinal Rules 2 · Near Miss 2 · พฤติกรรมตามกิจกรรมเสี่ยงสูง 1 = 5 เรื่อง/คน/ปี
- *   Target Plant 425 เรื่อง/ปี (= 5 × 85 คน)
+ *   เป้า/คน/ปี:   PSIF Cardinal Rules 2 · Near Miss 2 · พฤติกรรมตามกิจกรรมเสี่ยงสูง 1 = 5 เรื่อง
+ *   Target Plant: PSIF 170 · Near Miss 170 · พฤติกรรม 85 = 425 เรื่อง/ปี (= เป้า/คน × 85 คน)
  * 🚫 ระบบชุดนี้ไม่มีการคิดโบนัสจาก PSIF (ต่างจาก PSIF ของโรงงานเดิม) */
-const CA_TARGET = { t_psif: 2, t_near_miss: 2, t_behavior: 1, plant_target: 425 };
+const CA_TARGET = { t_psif: 2, t_near_miss: 2, t_behavior: 1, plant_target: 425,
+                    p_psif: 170, p_near_miss: 170, p_behavior: 85 };
+/* เกลี่ย Target Plant ก้อนเดียว (ข้อมูลก่อน v2.9) ออกเป็น 3 ประเภทตามสัดส่วนเป้ารายคน */
+function spreadPlantTarget(total, catTgt, per) {
+  if (!per || !total) return { 'PSIF': CA_TARGET.p_psif, 'Near miss': CA_TARGET.p_near_miss, 'Behavior': CA_TARGET.p_behavior };
+  const out = {};
+  for (const k of Object.keys(catTgt)) out[k] = Math.round(total * catTgt[k] / per);
+  return out;
+}
 /* อ่านตัวเลขแบบยอมให้เป็น 0 ได้ — null/undefined/'' เท่านั้นที่ถอยไปใช้ค่าตั้งต้น */
 function num(v, dflt) { return (v === null || v === undefined || v === '') ? dflt : (+v || 0); }

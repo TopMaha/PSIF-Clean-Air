@@ -40,17 +40,25 @@ CREATE TABLE IF NOT EXISTS categories (
 --   t_near_miss  = Near Miss                      2 เรื่อง/คน/ปี
 --   t_behavior   = พฤติกรรมตามกิจกรรมเสี่ยงสูง      1 เรื่อง/คน/ปี
 --   per_person_target = ผลรวมทั้ง 3 ช่อง (5 เรื่อง/คน/ปี) — เก็บไว้ให้อ่านง่าย
---   plant_target = Target Plant ทั้งโรงงาน 425 เรื่อง/ปี (= 5 × 85 คน) ตั้งเป็นตัวเลขคงที่
---                  เพราะเป็นเป้าที่ตกลงกันไว้ ไม่ให้ขยับตามหัวคนที่เปลี่ยนระหว่างปี
+-- v2.9: Target Plant ตั้ง "แยกรายประเภท" ได้เหมือนเป้ารายคน
+--       (แก้ไขได้เฉพาะ Super Admin และต้องกรอกรหัสเปิดแก้ไข TENNECO_CA ที่หน้าตั้งค่า)
+--   p_psif       = Target Plant · PSIF Cardinal Rules       170 เรื่อง/ปี (= 2 × 85 คน)
+--   p_near_miss  = Target Plant · Near Miss                 170 เรื่อง/ปี (= 2 × 85 คน)
+--   p_behavior   = Target Plant · พฤติกรรมตามกิจกรรมเสี่ยงสูง   85 เรื่อง/ปี (= 1 × 85 คน)
+--   plant_target = ผลรวมทั้ง 3 ช่อง = 425 เรื่อง/ปี — เป้าที่ตกลงกันไว้ ไม่ขยับตามหัวคนที่เปลี่ยนระหว่างปี
 -- 🚫 ชุดนี้ไม่มีการคิดโบนัสจาก PSIF (ต่างจากระบบ PSIF ของโรงงานเดิม)
--- (DB ที่สร้างไว้ก่อน v2.8: รัน migrate-2026-09-08-cleanair-targets.sql)
+-- (DB ที่สร้างไว้ก่อน v2.8: รัน migrate-2026-09-08-cleanair-targets.sql
+--  DB ที่สร้างไว้ก่อน v2.9: รัน migrate-2026-09-17-plant-cat-targets.sql)
 CREATE TABLE IF NOT EXISTS targets (
   year              INTEGER PRIMARY KEY,
   per_person_target INTEGER NOT NULL DEFAULT 5,
   t_psif            INTEGER NOT NULL DEFAULT 2,
   t_near_miss       INTEGER NOT NULL DEFAULT 2,
   t_behavior        INTEGER NOT NULL DEFAULT 1,
-  plant_target      INTEGER NOT NULL DEFAULT 425
+  plant_target      INTEGER NOT NULL DEFAULT 425,
+  p_psif            INTEGER NOT NULL DEFAULT 170,
+  p_near_miss       INTEGER NOT NULL DEFAULT 170,
+  p_behavior        INTEGER NOT NULL DEFAULT 85
 );
 
 -- ---------- admin issuance: opens the "in-progress" step per VSM/year ----------
@@ -137,10 +145,10 @@ CREATE INDEX IF NOT EXISTS idx_notif_emp_id ON notifications(employee_id, id DES
 --  SEED DATA
 -- ============================================================
 
--- เป้าหมายของ Clean Air: 2 + 2 + 1 = 5 เรื่อง/คน/ปี · Target Plant 425 เรื่อง/ปี
-INSERT OR IGNORE INTO targets (year, per_person_target, t_psif, t_near_miss, t_behavior, plant_target) VALUES (2025, 5, 2, 2, 1, 425);
-INSERT OR IGNORE INTO targets (year, per_person_target, t_psif, t_near_miss, t_behavior, plant_target) VALUES (2026, 5, 2, 2, 1, 425);
-INSERT OR IGNORE INTO targets (year, per_person_target, t_psif, t_near_miss, t_behavior, plant_target) VALUES (2027, 5, 2, 2, 1, 425);
+-- เป้าหมายของ Clean Air: 2 + 2 + 1 = 5 เรื่อง/คน/ปี · Target Plant 170 + 170 + 85 = 425 เรื่อง/ปี
+INSERT OR IGNORE INTO targets (year, per_person_target, t_psif, t_near_miss, t_behavior, plant_target, p_psif, p_near_miss, p_behavior) VALUES (2025, 5, 2, 2, 1, 425, 170, 170, 85);
+INSERT OR IGNORE INTO targets (year, per_person_target, t_psif, t_near_miss, t_behavior, plant_target, p_psif, p_near_miss, p_behavior) VALUES (2026, 5, 2, 2, 1, 425, 170, 170, 85);
+INSERT OR IGNORE INTO targets (year, per_person_target, t_psif, t_near_miss, t_behavior, plant_target, p_psif, p_near_miss, p_behavior) VALUES (2027, 5, 2, 2, 1, 425, 170, 170, 85);
 
 -- PSIF categories — fixed at exactly 3 types (PSIF / Near miss / Behavior)
 INSERT OR IGNORE INTO categories (id, name) VALUES
