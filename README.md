@@ -49,8 +49,9 @@
 | `worker.js`  | Cloudflare Worker = API เชื่อม D1 + R2 |
 | `schema.sql` | โครงสร้างตาราง D1 + ข้อมูลตั้งต้น (ผู้ดูแล 1 คน, ประเภท, พื้นที่, เป้าหมาย 2/2/1 + Target Plant 170/170/85) |
 | `import-employees.sql` | รายชื่อพนักงานจริง 85 คน + ผู้ส่งที่ลาออกแล้ว 6 คน (จาก sheet **Name**) |
-| `import-psif-2026.sql` | ข้อมูล PSIF ปี 2026 จำนวน 564 เรื่อง (จาก sheet **database**) |
-| `import-skipped-suggestions.csv` | 29 เรื่องประเภท *Suggestions* ที่ไม่ได้นำเข้า — เก็บไว้ตรวจย้อนหลัง |
+| `import-psif-2026.sql` | ข้อมูล PSIF ปี 2026 ม.ค.–ส.ค. จำนวน 500 เรื่อง (จาก sheet **database** · เดิม 564 — ตัดเดือน ก.ย. ออกแล้ว) |
+| `migrate-2026-10-09-replace-sep-oct.sql` | แทนที่ข้อมูลเดือน **ก.ย.–ต.ค. 2026** ทั้งหมดด้วย `PSIF Sep-Oct.xlsx` (91 เรื่อง) |
+| `import-skipped-suggestions.csv` | 34 เรื่องประเภท *Suggestions* ที่ไม่ได้นำเข้า — เก็บไว้ตรวจย้อนหลัง |
 | `migrate-2026-09-08-cleanair-targets.sql` | เพิ่มคอลัมน์เป้าหมายรายประเภท (ใช้กับ D1 ที่สร้างก่อน v2.8) |
 | `migrate-2026-09-08-import-photo-exempt.sql` | เติม prefix `import-` ให้เรื่องที่นำเข้ารอบแรก เพื่อยกเว้นกฎรูป |
 | `migrate-2026-09-17-plant-cat-targets.sql` | เพิ่มคอลัมน์ Target Plant **รายประเภท** `p_psif` · `p_near_miss` · `p_behavior` (ใช้กับ D1 ที่สร้างก่อน v2.9) |
@@ -621,6 +622,7 @@ wrangler d1 execute psif-cleanair-db --remote --command "UPDATE psif SET vsm=(SE
 ```bash
 wrangler d1 execute psif-cleanair-db --remote --file=./import-employees.sql
 wrangler d1 execute psif-cleanair-db --remote --file=./import-psif-2026.sql
+wrangler d1 execute psif-cleanair-db --remote --file=./migrate-2026-10-09-replace-sep-oct.sql
 ```
 รันซ้ำได้ไม่ทำให้ข้อมูลซ้ำ — ทุกเรื่องมี `request_id = xlsx2026-<ลำดับใน Excel>` เป็นกุญแจกันซ้ำ
 
@@ -673,3 +675,26 @@ wrangler d1 execute psif-cleanair-db --remote --file=./import-psif-2026.sql
 
 > เกณฑ์เดียวกันนี้ใช้กับ **ช่องว่างข้อมูลพนักงานลาออก** (`RESIGNED-*`) ที่มีอยู่เดิม
 > และคิดเหมือนกันทั้งฝั่งหน้าเว็บและฝั่ง API (`no_target` ใน `/report/person`)
+
+---
+
+## 🔁 แทนที่ข้อมูลเดือน ก.ย.–ต.ค. 2026 ด้วย PSIF Sep-Oct.xlsx (2026-10-09)
+
+ไฟล์ `PSIF Sep-Oct.xlsx` (sheet **database**, คอลัมน์เดียวกับไฟล์รอบแรก) คือข้อมูลเดือน ก.ย.–ต.ค. ฉบับแก้แล้ว
+— 51 จาก 64 เรื่องที่รอบแรกลงไว้วันที่ 1 ก.ย. ไฟล์ใหม่ย้ายไปเป็นวันที่ 1 ต.ค. และหลายเรื่องเขียนรายละเอียดใหม่
+
+```bash
+wrangler d1 execute psif-cleanair-db --remote --file=./migrate-2026-10-09-replace-sep-oct.sql
+```
+
+| ขั้น | ผล |
+|---|---|
+| ลบทุกเรื่องที่วันที่ส่งอยู่ใน ก.ย.–ต.ค. 2026 (+ รูป/แจ้งเตือนที่ผูกอยู่) | ก.ย. 64 เรื่องเดิมออก · ต.ค. ไม่มีเรื่องเดิม |
+| ใส่เรื่องจากไฟล์ใหม่ | **ก.ย. 21** (เสร็จทั้งหมด มีเลข No.PSIF ครบ) · **ต.ค. 70** (รอ Safety 60 · กำลังดำเนินการ 8 · เสร็จ 2) |
+| `Suggestions` 6 เรื่อง | ไม่นำเข้า — เพิ่มใน `import-skipped-suggestions.csv` (ลำดับขึ้นต้น `SepOct-`) |
+
+- แปลงประเภท/สถานะ/รายละเอียดด้วยกติกาเดียวกับรอบแรก (ตารางด้านบน)
+- `request_id = import-sepoct2026-<ลำดับใน Excel>` — มี prefix `import-` จึงไม่ถูกทวงรูปก่อน/หลัง
+- ชื่อและแผนกผู้ส่งยึดตามทะเบียนพนักงานในระบบ (ไฟล์ขึ้น `#N/A` 4 แถว → ดึงชื่อจากรหัสได้ครบ)
+- เสร็จแล้วแต่ไม่มีวันที่ปิด (ลำดับ 4 · 12 · 95) → `done_at` ว่าง หน้าเว็บแสดงวันที่ส่งแทน
+- ⚠️ รันไฟล์นี้ซ้ำ = ลบ ก.ย.–ต.ค. ทั้งเดือนอีกรอบ **รวมเรื่องที่บันทึกผ่านแอปในช่วงนั้น** — ตรวจจำนวนก่อนรันทุกครั้ง
